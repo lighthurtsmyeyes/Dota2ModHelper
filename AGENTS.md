@@ -152,6 +152,19 @@ The DMX stores sparse deltas plus vertex indices, and the bind pose lives in the
 
 Verified against `morphling.vmdl` + `crown_of_tears_model.vmdl`: output matches the reference merged file line-for-line except the reference tool's float32 round-trip (this implementation preserves exact value text).
 
+## Transfer Animations (Model Helper tab)
+
+`model_helper::TransferAnimations()` replaces source animations with "mirror" animations from a target model:
+
+- Target selection mirrors Merge Meshes (own UI fields `transferTargetPath`/`transferTargetVpkEntry`): `.vmdl` used directly, `.vmdl_c`/`.vpk` decompiled with all 5 enchantments via the shared `PrepareTargetVmdl()` helper in `DecompilerUI.cpp` (also used by `RunMergeMeshesJob`).
+- For every `AnimFile` in the source `AnimationList` (recursive through `Folder`s, reusing `ExtractAnimFiles`) a match key is built from `activity_name` + sorted `ActivityModifier` list; the same key is built for target animations (map of key → queue of indices, duplicates consumed in order).
+- **Match**: the source block is replaced by the target block **verbatim** except `name` (keeps the source name, re-indented to the source depth). Referenced `source_filename` / `additional_anim_files` `.dmx` files are copied into the source game dir (same reuse/unique-suffix rules as MergeMeshes, suffix `_t<N>`) and refs rewritten.
+- **No match**: the animation is renamed to `<name>_MISSMATCH` across the `AnimationList` section — but only in `name = "..."` values and bare string-array entries (`anim_order`, `blend_anim_list`, `blendList[].name`). The `IsNameKeyValue`/`IsArrayStringEntry` guards in `ModelHelper.cpp` exist because a blind quoted-token rename corrupts `activity_name` values when an animation name collides with a modifier name (real case: anim `loadout` vs modifier `loadout`). Do not "simplify" this back to a plain find/replace.
+- Animations with empty `activity_name` (delta `@...`, `bindPose`) and names already ending in `_MISSMATCH` are skipped — re-running is a no-op.
+- Source `.vmdl` is modified in place.
+
+Verified bristleback ← axe: 30 transferred / 204 mismatched, second run fully idempotent, KV3 stays balanced.
+
 ## VRF / Decompiler UI
 
 `src/DecompilerUI.cpp/.h` exposes the `Source2Viewer-CLI.exe` functionality through an ImGui window.

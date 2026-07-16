@@ -42,6 +42,9 @@ struct DecompilerConfig {
 
     char mergeTargetPath[512] = "";
     char mergeTargetVpkEntry[512] = "";
+
+    char transferTargetPath[512] = "";
+    char transferTargetVpkEntry[512] = "";
 };
 
 struct DecompilerState {

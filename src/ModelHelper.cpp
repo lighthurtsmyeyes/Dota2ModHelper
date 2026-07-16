@@ -852,6 +852,190 @@ fs::path LocateTargetDmx(const std::string& ref, const fs::path& targetVmdl, con
     return {};
 }
 
+// ---------------------------------------------------------------------------
+// Transfer Animations
+// ---------------------------------------------------------------------------
+
+constexpr const char* kMismatchSuffix = "_MISSMATCH";
+
+struct QuotedToken {
+    size_t start = 0; // index of opening quote
+    size_t end = 0;   // index past closing quote
+    std::string text; // unquoted content
+};
+
+std::vector<QuotedToken> ExtractQuotedTokens(const std::string& text, size_t begin, size_t end) {
+    std::vector<QuotedToken> tokens;
+    size_t i = begin;
+    while (i < end) {
+        if (text[i] != '"') { ++i; continue; }
+        size_t q = i + 1;
+        std::string content;
+        bool closed = false;
+        while (q < end) {
+            if (text[q] == '\\' && q + 1 < end) { content += text[q]; content += text[q + 1]; q += 2; continue; }
+            if (text[q] == '"') { closed = true; break; }
+            content += text[q];
+            ++q;
+        }
+        if (!closed) break;
+        tokens.push_back({ i, q + 1, std::move(content) });
+        i = q + 1;
+    }
+    return tokens;
+}
+
+std::string LeadingIndent(const std::string& block) {
+    size_t i = 0;
+    while (i < block.size() && (block[i] == '\t' || block[i] == ' ')) ++i;
+    return block.substr(0, i);
+}
+
+std::string ReindentBlock(const std::string& block, const std::string& oldIndent, const std::string& newIndent) {
+    if (oldIndent == newIndent || oldIndent.empty()) return block;
+    std::string out;
+    out.reserve(block.size());
+    size_t pos = 0;
+    while (pos < block.size()) {
+        size_t lineEnd = block.find('\n', pos);
+        if (lineEnd == std::string::npos) lineEnd = block.size();
+        else ++lineEnd;
+        size_t lineLen = lineEnd - pos;
+        if (lineLen >= oldIndent.size() && block.compare(pos, oldIndent.size(), oldIndent) == 0) {
+            out += newIndent;
+            out.append(block, pos + oldIndent.size(), lineLen - oldIndent.size());
+        }
+        else {
+            out.append(block, pos, lineLen);
+        }
+        pos = lineEnd;
+    }
+    return out;
+}
+
+bool CopyAnimFileToSourceDir(const fs::path& srcFile, const fs::path& destDir, const std::string& gameDir,
+                             const std::function<void(const std::string&)>& logLine,
+                             std::string& outRef, bool& outCopied) {
+    std::error_code ec;
+    outCopied = false;
+    std::string fileName = srcFile.filename().string();
+    fs::path dest = destDir / fileName;
+    if (fs::exists(dest, ec)) {
+        auto srcSize = fs::file_size(srcFile, ec);
+        auto dstSize = fs::file_size(dest, ec);
+        if (!ec && srcSize == dstSize) {
+            logLine("Reusing existing .dmx: " + dest.string());
+        }
+        else {
+            std::string stem = fs::path(fileName).stem().string();
+            std::string ext = fs::path(fileName).extension().string();
+            for (int i = 1; i < 100; ++i) {
+                fs::path candidate = destDir / (stem + "_t" + std::to_string(i) + ext);
+                if (!fs::exists(candidate, ec)) {
+                    dest = candidate;
+                    fileName = candidate.filename().string();
+                    break;
+                }
+            }
+            logLine("Destination .dmx exists with different content, using unique name: " + fileName);
+        }
+    }
+    if (!fs::exists(dest, ec)) {
+        fs::copy_file(srcFile, dest, ec);
+        if (ec) {
+            logLine("WARNING: failed to copy .dmx '" + srcFile.string() + "': " + ec.message());
+            return false;
+        }
+        outCopied = true;
+        logLine("Copied .dmx: " + srcFile.string() + " -> " + dest.string());
+    }
+    outRef = gameDir + "/" + fileName;
+    return true;
+}
+
+// Rewrites a single animation-file reference (source_filename / additional_anim_files
+// entry) inside a transferred block: locates the file in the target tree, copies it
+// into the source game dir and replaces the quoted reference with the new game path.
+void CopyAndRewriteRef(std::string& block, size_t tokenStart, size_t tokenEnd, const std::string& ref,
+                       const fs::path& targetVmdl, const fs::path& searchRoot,
+                       const fs::path& destDir, const std::string& gameDir,
+                       const std::function<void(const std::string&)>& logLine,
+                       int& filesCopied) {
+    fs::path dmxSrc = LocateTargetDmx(ref, targetVmdl, searchRoot);
+    if (dmxSrc.empty()) {
+        logLine("WARNING: animation .dmx not found (" + ref + "), reference kept as-is.");
+        return;
+    }
+    std::string newRef;
+    bool copied = false;
+    if (!CopyAnimFileToSourceDir(dmxSrc, destDir, gameDir, logLine, newRef, copied)) return;
+    if (copied) ++filesCopied;
+    block.replace(tokenStart, tokenEnd - tokenStart, "\"" + newRef + "\"");
+}
+
+// Returns true if the quoted token at tokenStart (index of the opening quote) is the
+// value of a `name = "..."` key (exactly "name", not "activity_name"/"weight_list_name").
+bool IsNameKeyValue(const std::string& text, size_t tokenStart, size_t scopeBegin) {
+    size_t i = tokenStart;
+    while (i > scopeBegin && (text[i - 1] == ' ' || text[i - 1] == '\t')) --i;
+    if (i == scopeBegin || text[i - 1] != '=') return false;
+    --i;
+    while (i > scopeBegin && (text[i - 1] == ' ' || text[i - 1] == '\t')) --i;
+    size_t idEnd = i;
+    while (i > scopeBegin && IsIdentChar(text[i - 1])) --i;
+    return text.compare(i, idEnd - i, "name") == 0;
+}
+
+// Returns true if the quoted token at tokenStart is a bare string array entry
+// (preceded only by whitespace and '[' or ','), e.g. anim_order / blend_anim_list.
+bool IsArrayStringEntry(const std::string& text, size_t tokenStart, size_t scopeBegin) {
+    size_t i = tokenStart;
+    while (i > scopeBegin && (text[i - 1] == ' ' || text[i - 1] == '\t' ||
+                              text[i - 1] == '\n' || text[i - 1] == '\r')) --i;
+    if (i == scopeBegin) return false;
+    return text[i - 1] == ',' || text[i - 1] == '[';
+}
+
+// Renames every animation-name reference to oldName inside the AnimationList
+// section: AnimFile `name` fields, AnimOrder entries, blend list entries.
+// `activity_name` values (incl. ActivityModifier names) are intentionally left alone.
+bool RenameAnimationInAnimationList(std::string& vmdlText, const std::string& oldName, const std::string& newName) {
+    size_t animListPos = vmdlText.find("_class = \"AnimationList\"");
+    if (animListPos == std::string::npos) return false;
+    size_t listBrace = FindOpeningBraceBefore(vmdlText, animListPos);
+    if (listBrace == std::string::npos) return false;
+    size_t listStart, listEnd;
+    if (!FindBalancedBlock(vmdlText, listBrace, '{', '}', listStart, listEnd)) return false;
+
+    std::string section = vmdlText.substr(listStart, listEnd - listStart);
+    std::string replacement = "\"" + newName + "\"";
+    bool replaced = false;
+    size_t i = 0;
+    while (i < section.size()) {
+        if (section[i] != '"') { ++i; continue; }
+        size_t q = i + 1;
+        bool closed = false;
+        while (q < section.size()) {
+            if (section[q] == '\\' && q + 1 < section.size()) { q += 2; continue; }
+            if (section[q] == '"') { closed = true; break; }
+            ++q;
+        }
+        if (!closed) break;
+        size_t tokenLen = q - i - 1;
+        if (tokenLen == oldName.size() && section.compare(i + 1, tokenLen, oldName) == 0 &&
+            (IsNameKeyValue(section, i, 0) || IsArrayStringEntry(section, i, 0))) {
+            section.replace(i, tokenLen + 2, replacement);
+            i += replacement.size();
+            replaced = true;
+            continue;
+        }
+        i = q + 1;
+    }
+    if (!replaced) return false;
+    vmdlText.replace(listStart, listEnd - listStart, section);
+    return true;
+}
+
 } // namespace
 
 namespace model_helper {
@@ -1451,6 +1635,195 @@ MergeMeshesResult MergeMeshes(const MergeMeshesOptions& options) {
     result.message = "Merged " + std::to_string(result.meshesAdded) + " mesh(es), " +
         std::to_string(result.attachmentsAdded) + " attachment(s), " +
         std::to_string(result.bonesAdded) + " bone(s) -> " + outputPath.string();
+    result.log = log.str();
+    return result;
+}
+
+TransferAnimationsResult TransferAnimations(const TransferAnimationsOptions& options) {
+    TransferAnimationsResult result;
+    std::ostringstream log;
+    auto logLine = [&](const std::string& s) { log << s << "\n"; };
+
+    if (options.sourceVmdlPath.empty() || options.targetVmdlPath.empty()) {
+        result.message = "Source or target VMDL path is empty.";
+        return result;
+    }
+    std::error_code ec;
+    fs::path sourcePath = fs::path(options.sourceVmdlPath).lexically_normal();
+    fs::path targetPath = fs::path(options.targetVmdlPath).lexically_normal();
+    if (!fs::exists(sourcePath, ec)) {
+        result.message = "Source VMDL not found: " + options.sourceVmdlPath;
+        return result;
+    }
+    if (!fs::exists(targetPath, ec)) {
+        result.message = "Target VMDL not found: " + options.targetVmdlPath;
+        return result;
+    }
+    {
+        std::string a = ToLowerAscii(fs::absolute(sourcePath, ec).string());
+        std::string b = ToLowerAscii(fs::absolute(targetPath, ec).string());
+        if (a == b) {
+            result.message = "Source and target are the same file.";
+            return result;
+        }
+    }
+
+    fs::path contentRoot;
+    std::string gameDir;
+    if (!DeriveContentRootAndGameDir(options.sourceVmdlPath, contentRoot, gameDir)) {
+        result.message = "Cannot derive content root from the source path (expected a path containing a \"models\" folder).";
+        return result;
+    }
+    logLine("Source content root: " + contentRoot.string());
+    logLine("Source game dir: " + gameDir);
+
+    fs::path searchRoot = options.targetSearchRoot.empty() ? targetPath.parent_path() : fs::path(options.targetSearchRoot);
+    logLine("Target search root: " + searchRoot.string());
+
+    std::string sourceText = ReadFile(sourcePath.string());
+    if (sourceText.empty()) {
+        result.message = "Failed to read source VMDL: " + sourcePath.string();
+        return result;
+    }
+    std::string targetText = ReadFile(targetPath.string());
+    if (targetText.empty()) {
+        result.message = "Failed to read target VMDL: " + targetPath.string();
+        return result;
+    }
+
+    std::vector<ParsedAnimFile> sourceAnims = ExtractAnimFiles(sourceText);
+    if (sourceAnims.empty()) {
+        result.message = "No AnimFile blocks found in the source VMDL.";
+        return result;
+    }
+    std::vector<ParsedAnimFile> targetAnims = ExtractAnimFiles(targetText);
+    if (targetAnims.empty()) {
+        result.message = "No AnimFile blocks found in the target VMDL.";
+        return result;
+    }
+    logLine("Source animations: " + std::to_string(sourceAnims.size()) +
+            ", target animations: " + std::to_string(targetAnims.size()));
+
+    // key -> queue of target animation indices (duplicated keys are consumed in order)
+    std::unordered_map<std::string, std::vector<size_t>> targetMap;
+    for (size_t i = 0; i < targetAnims.size(); ++i) {
+        if (targetAnims[i].activityName.empty()) continue;
+        std::string key = targetAnims[i].activityName + "\0";
+        for (const auto& m : targetAnims[i].modifiers) key += m + "\0";
+        targetMap[key].push_back(i);
+    }
+
+    fs::path destDir = contentRoot / gameDir;
+    fs::create_directories(destDir, ec);
+
+    struct Replacement {
+        size_t start = 0;
+        size_t end = 0;
+        std::string text;
+    };
+    std::vector<Replacement> replacements;
+    std::vector<std::string> mismatchNames;
+
+    const size_t suffixLen = std::strlen(kMismatchSuffix);
+
+    for (const auto& src : sourceAnims) {
+        if (src.activityName.empty()) {
+            ++result.animationsSkipped;
+            continue;
+        }
+        if (src.name.size() >= suffixLen &&
+            src.name.compare(src.name.size() - suffixLen, suffixLen, kMismatchSuffix) == 0) {
+            ++result.animationsSkipped;
+            logLine("Animation '" + src.name + "' is already marked, skipped.");
+            continue;
+        }
+
+        std::string key = src.activityName + "\0";
+        for (const auto& m : src.modifiers) key += m + "\0";
+
+        size_t targetIndex = std::string::npos;
+        auto mapIt = targetMap.find(key);
+        if (mapIt != targetMap.end() && !mapIt->second.empty()) {
+            targetIndex = mapIt->second.front();
+            mapIt->second.erase(mapIt->second.begin());
+        }
+        if (targetIndex == std::string::npos) {
+            mismatchNames.push_back(src.name);
+            ++result.animationsMismatched;
+            std::string mods;
+            for (const auto& m : src.modifiers) mods += (mods.empty() ? "" : ", ") + m;
+            logLine("No mirror animation for '" + src.name + "' (activity '" + src.activityName +
+                    "'" + (mods.empty() ? std::string() : ", modifiers: " + mods) +
+                    "), renamed to '" + src.name + kMismatchSuffix + "'.");
+            continue;
+        }
+
+        const ParsedAnimFile& tgt = targetAnims[targetIndex];
+
+        std::string newBlock = ReindentBlock(tgt.raw, LeadingIndent(tgt.raw), LeadingIndent(src.raw));
+        ReplaceNameInBlock(newBlock, src.name);
+
+        // Copy referenced animation files into the source game dir and rewrite refs.
+        size_t blockOpen = newBlock.find('{');
+        size_t blockClose = newBlock.rfind('}');
+        if (blockOpen != std::string::npos && blockClose != std::string::npos && blockClose > blockOpen) {
+            size_t vs, ve;
+            if (FindTopLevelKeyValue(newBlock, blockOpen + 1, blockClose, "source_filename", vs, ve) &&
+                vs < newBlock.size() && newBlock[vs] == '"') {
+                std::string ref = Unquote(newBlock.substr(vs, ve - vs));
+                if (!ref.empty()) {
+                    CopyAndRewriteRef(newBlock, vs, ve, ref, targetPath, searchRoot, destDir, gameDir,
+                                      logLine, result.filesCopied);
+                }
+            }
+
+            // Re-locate after the source_filename rewrite (spans may have shifted).
+            blockOpen = newBlock.find('{');
+            blockClose = newBlock.rfind('}');
+            if (FindTopLevelKeyValue(newBlock, blockOpen + 1, blockClose, "additional_anim_files", vs, ve)) {
+                std::vector<QuotedToken> tokens = ExtractQuotedTokens(newBlock, vs, ve);
+                for (auto it = tokens.rbegin(); it != tokens.rend(); ++it) {
+                    if (it->text.empty()) continue;
+                    CopyAndRewriteRef(newBlock, it->start, it->end, it->text, targetPath, searchRoot,
+                                      destDir, gameDir, logLine, result.filesCopied);
+                }
+            }
+        }
+
+        replacements.push_back({ src.startPos, src.endPos, std::move(newBlock) });
+        ++result.animationsTransferred;
+        logLine("Transferred animation '" + src.name + "' <- '" + tgt.name + "'.");
+    }
+
+    if (replacements.empty() && mismatchNames.empty()) {
+        result.message = "Nothing to transfer (no transferable animations found).";
+        result.log = log.str();
+        return result;
+    }
+
+    std::sort(replacements.begin(), replacements.end(),
+              [](const Replacement& a, const Replacement& b) { return a.start > b.start; });
+    for (const auto& r : replacements) {
+        sourceText.replace(r.start, r.end - r.start, r.text);
+    }
+
+    for (const auto& name : mismatchNames) {
+        if (!RenameAnimationInAnimationList(sourceText, name, name + kMismatchSuffix)) {
+            logLine("WARNING: failed to rename references for '" + name + "'.");
+        }
+    }
+
+    if (!WriteFile(sourcePath.string(), sourceText)) {
+        result.message = "Failed to write modified VMDL file: " + sourcePath.string();
+        result.log = log.str();
+        return result;
+    }
+    logLine("Modified VMDL written to: " + sourcePath.string());
+
+    result.success = true;
+    result.message = "Transferred " + std::to_string(result.animationsTransferred) + " animation(s), " +
+        std::to_string(result.animationsMismatched) + " mismatch(es) renamed, " +
+        std::to_string(result.filesCopied) + " file(s) copied.";
     result.log = log.str();
     return result;
 }

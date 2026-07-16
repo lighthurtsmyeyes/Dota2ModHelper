@@ -34,4 +34,22 @@ struct MergeMeshesResult {
 
 MergeMeshesResult MergeMeshes(const MergeMeshesOptions& options);
 
+struct TransferAnimationsOptions {
+    std::string sourceVmdlPath;    // source .vmdl on disk (modified in place)
+    std::string targetVmdlPath;    // target .vmdl on disk (provides animations)
+    std::string targetSearchRoot;  // root dir used to resolve target animation .dmx refs
+};
+
+struct TransferAnimationsResult {
+    bool success = false;
+    std::string message;
+    std::string log;
+    int animationsTransferred = 0;
+    int animationsMismatched = 0;
+    int animationsSkipped = 0;
+    int filesCopied = 0;
+};
+
+TransferAnimationsResult TransferAnimations(const TransferAnimationsOptions& options);
+
 } // namespace model_helper

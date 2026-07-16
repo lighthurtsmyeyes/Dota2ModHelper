@@ -60,7 +60,7 @@ There is no test suite — verification is a successful Release x64 build.
 
 ## Notes
 
-- The facial-flex restoration assumes the pinned VRF 15.0 CLI, which exports glTF geometry already in Source coordinate space. `MorphMerge::Options::applyAxisTransform` must stay `false` — enabling it permutes every facial flex. See `AGENTS.md` for the full invariant list.
+- The facial-flex restoration assumes the pinned VRF 19.2 CLI, which exports glTF geometry already in Source coordinate space. `MorphMerge::Options::applyAxisTransform` must stay `false` — enabling it permutes every facial flex. See `AGENTS.md` for the full invariant list.
 - `VPKManager` is a copy of the main project's wrapper; keep the two in sync when changing VPK behavior.
 - `AGENTS.md` contains a compact deep-dive into the internals (VPK cache semantics, morph pipeline, merge rules) intended for AI assistants and contributors.
 

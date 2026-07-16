@@ -1232,6 +1232,101 @@ bool DecompileTargetForMerge(const std::string& targetPath,
     return true;
 }
 
+bool PrepareTargetVmdl(const std::string& targetRaw,
+                       const std::string& vpkEntry,
+                       const std::function<void(const std::string&)>& logLine,
+                       const std::function<void(float, const std::string&)>& setStatus,
+                       std::string& outTargetVmdl,
+                       std::string& outSearchRoot,
+                       fs::path& outTempDir,
+                       fs::path& outTempVpk,
+                       std::string& outError) {
+    if (targetRaw.empty()) {
+        outError = OBF_CSTR("Target model path is empty.");
+        return false;
+    }
+    std::string targetPath = ResolveProjectRelativePath(targetRaw).string();
+    if (!fs::exists(targetPath)) {
+        outError = OBF_CSTR("Target file not found: ") + targetPath;
+        return false;
+    }
+
+    std::string lowerTarget = targetPath;
+    std::transform(lowerTarget.begin(), lowerTarget.end(), lowerTarget.begin(),
+        [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+    auto hasExt = [&](const char* ext) {
+        size_t len = std::strlen(ext);
+        return lowerTarget.size() >= len && lowerTarget.substr(lowerTarget.size() - len) == ext;
+    };
+
+    if (hasExt(".vmdl")) {
+        outTargetVmdl = targetPath;
+        // The search root is only used to resolve target refs; prefer the target's content root.
+        std::string tp = targetPath;
+        std::string low = tp;
+        std::transform(low.begin(), low.end(), low.begin(),
+            [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+        size_t pos = std::string::npos;
+        for (const char* pat : { "\\models\\", "/models/" }) {
+            size_t q = low.rfind(pat);
+            if (q != std::string::npos && (pos == std::string::npos || q > pos)) pos = q;
+        }
+        if (pos != std::string::npos) {
+            outSearchRoot = tp.substr(0, pos);
+        }
+        else {
+            outSearchRoot = fs::path(tp).parent_path().string();
+        }
+        logLine(OBF_CSTR("Target is a source .vmdl on disk."));
+        return true;
+    }
+
+    if (hasExt(".vmdl_c") || hasExt(".vpk")) {
+        if (VRF::IsSetupNeeded()) {
+            setStatus(0.10f, OBF_CSTR("Downloading Source2Viewer-CLI..."));
+            if (!VRF::GetInstance().Setup()) {
+                outError = OBF_CSTR("Failed to download or extract Source2Viewer-CLI.");
+                return false;
+            }
+        }
+        VRF::GetInstance().TerminateLingeringDecompilerProcesses();
+        setStatus(0.30f, OBF_CSTR("Decompiling target model..."));
+        if (!DecompileTargetForMerge(targetPath, vpkEntry, outTargetVmdl, outSearchRoot,
+                outTempDir, outTempVpk, logLine, outError)) {
+            if (!outTempVpk.empty()) {
+                VPKManager::GetInstance().ClearCacheEntry(outTempVpk.string());
+                std::error_code rmEc;
+                fs::remove(outTempVpk, rmEc);
+            }
+            if (!outTempDir.empty()) {
+                std::error_code rmEc;
+                fs::remove_all(outTempDir, rmEc);
+            }
+            return false;
+        }
+        return true;
+    }
+
+    outError = OBF_CSTR("Target must be a .vmdl, .vmdl_c or .vpk file.");
+    return false;
+}
+
+void CleanupTempArtifacts(fs::path& tempDir, fs::path& tempVpk) {
+    if (!tempVpk.empty()) {
+        VPKManager::GetInstance().ClearCacheEntry(tempVpk.string());
+        std::error_code rmEc;
+        for (int i = 0; i < 10; ++i) {
+            fs::remove(tempVpk, rmEc);
+            if (!rmEc) break;
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        }
+    }
+    if (!tempDir.empty()) {
+        std::error_code rmEc;
+        fs::remove_all(tempDir, rmEc);
+    }
+}
+
 void RunMergeMeshesJob(std::shared_ptr<DecompilerState> state) {
     SH_AD_GUI();
 
@@ -1273,83 +1368,15 @@ void RunMergeMeshesJob(std::shared_ptr<DecompilerState> state) {
         finish(false, OBF_CSTR("Source VMDL file not found: ") + sourcePath);
         return;
     }
-    std::string targetRaw = local.mergeTargetPath;
-    if (targetRaw.empty()) {
-        finish(false, OBF_CSTR("Target model path is empty."));
-        return;
-    }
-    std::string targetPath = ResolveProjectRelativePath(targetRaw).string();
-    if (!fs::exists(targetPath)) {
-        finish(false, OBF_CSTR("Target file not found: ") + targetPath);
-        return;
-    }
-
-    std::string lowerTarget = targetPath;
-    std::transform(lowerTarget.begin(), lowerTarget.end(), lowerTarget.begin(),
-        [](unsigned char c) { return static_cast<char>(::tolower(c)); });
-    auto hasExt = [&](const char* ext) {
-        size_t len = std::strlen(ext);
-        return lowerTarget.size() >= len && lowerTarget.substr(lowerTarget.size() - len) == ext;
-    };
 
     std::string targetVmdl;
     std::string targetSearchRoot;
     fs::path tempDir;
     fs::path tempVpk;
-
-    if (hasExt(".vmdl")) {
-        targetVmdl = targetPath;
-        fs::path contentRoot;
-        std::string gameDir;
-        // The search root is only used to resolve target .dmx refs; prefer the target's content root.
-        std::string tp = targetPath;
-        {
-            // DeriveContentRootAndGameDir equivalent: use the target's own directory structure.
-            std::string low = tp;
-            std::transform(low.begin(), low.end(), low.begin(),
-                [](unsigned char c) { return static_cast<char>(::tolower(c)); });
-            size_t pos = std::string::npos;
-            for (const char* pat : { "\\models\\", "/models/" }) {
-                size_t q = low.rfind(pat);
-                if (q != std::string::npos && (pos == std::string::npos || q > pos)) pos = q;
-            }
-            if (pos != std::string::npos) {
-                targetSearchRoot = tp.substr(0, pos);
-            }
-            else {
-                targetSearchRoot = fs::path(tp).parent_path().string();
-            }
-        }
-        logLine(OBF_CSTR("Target is a source .vmdl on disk."));
-    }
-    else if (hasExt(".vmdl_c") || hasExt(".vpk")) {
-        if (VRF::IsSetupNeeded()) {
-            setStatus(0.10f, OBF_CSTR("Downloading Source2Viewer-CLI..."));
-            if (!VRF::GetInstance().Setup()) {
-                finish(false, OBF_CSTR("Failed to download or extract Source2Viewer-CLI."));
-                return;
-            }
-        }
-        VRF::GetInstance().TerminateLingeringDecompilerProcesses();
-        setStatus(0.30f, OBF_CSTR("Decompiling target model..."));
-        std::string decompileError;
-        if (!DecompileTargetForMerge(targetPath, local.mergeTargetVpkEntry, targetVmdl, targetSearchRoot,
-                tempDir, tempVpk, logLine, decompileError)) {
-            if (!tempVpk.empty()) {
-                VPKManager::GetInstance().ClearCacheEntry(tempVpk.string());
-                std::error_code rmEc;
-                fs::remove(tempVpk, rmEc);
-            }
-            if (!tempDir.empty()) {
-                std::error_code rmEc;
-                fs::remove_all(tempDir, rmEc);
-            }
-            finish(false, decompileError);
-            return;
-        }
-    }
-    else {
-        finish(false, OBF_CSTR("Target must be a .vmdl, .vmdl_c or .vpk file."));
+    std::string targetError;
+    if (!PrepareTargetVmdl(local.mergeTargetPath, local.mergeTargetVpkEntry, logLine, setStatus,
+                           targetVmdl, targetSearchRoot, tempDir, tempVpk, targetError)) {
+        finish(false, targetError);
         return;
     }
 
@@ -1364,19 +1391,75 @@ void RunMergeMeshesJob(std::shared_ptr<DecompilerState> state) {
     if (!result.log.empty()) logLine(result.log);
 
     setStatus(0.95f, OBF_CSTR("Cleaning up..."));
-    if (!tempVpk.empty()) {
-        VPKManager::GetInstance().ClearCacheEntry(tempVpk.string());
-        std::error_code rmEc;
-        for (int i = 0; i < 10; ++i) {
-            fs::remove(tempVpk, rmEc);
-            if (!rmEc) break;
-            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+    CleanupTempArtifacts(tempDir, tempVpk);
+
+    finish(result.success, result.message);
+}
+
+void RunTransferAnimationsJob(std::shared_ptr<DecompilerState> state) {
+    SH_AD_GUI();
+
+    DecompilerConfig local;
+    {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        local = state->config;
+        state->lastDecompilerOutput.clear();
+    }
+
+    auto logLine = [state](const std::string& line) {
+        std::cout << OBF_CSTR("[TransferAnimations] ") << line << std::endl;
+        if (state) {
+            std::lock_guard<std::mutex> lock(state->mutex);
+            if (!state->lastDecompilerOutput.empty()) state->lastDecompilerOutput += "\n";
+            state->lastDecompilerOutput += line;
         }
+    };
+
+    auto setStatus = [state](float p, const std::string& msg) {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        state->progress = p;
+        state->status = msg;
+    };
+
+    auto finish = [state](bool ok, const std::string& msg) {
+        std::lock_guard<std::mutex> lock(state->mutex);
+        state->busy = false;
+        state->progress = ok ? 1.0f : 0.0f;
+        state->status = msg;
+        state->showStatus = true;
+        state->lastError = ok ? "" : msg;
+        g_modelHelperRunning.store(false);
+    };
+
+    setStatus(0.05f, OBF_CSTR("Validating inputs..."));
+    std::string sourcePath = ResolveProjectRelativePath(local.modelHelperVmdlPath).string();
+    if (!fs::exists(sourcePath)) {
+        finish(false, OBF_CSTR("Source VMDL file not found: ") + sourcePath);
+        return;
     }
-    if (!tempDir.empty()) {
-        std::error_code rmEc;
-        fs::remove_all(tempDir, rmEc);
+
+    std::string targetVmdl;
+    std::string targetSearchRoot;
+    fs::path tempDir;
+    fs::path tempVpk;
+    std::string targetError;
+    if (!PrepareTargetVmdl(local.transferTargetPath, local.transferTargetVpkEntry, logLine, setStatus,
+                           targetVmdl, targetSearchRoot, tempDir, tempVpk, targetError)) {
+        finish(false, targetError);
+        return;
     }
+
+    setStatus(0.80f, OBF_CSTR("Transferring animations..."));
+    model_helper::TransferAnimationsOptions options;
+    options.sourceVmdlPath = sourcePath;
+    options.targetVmdlPath = targetVmdl;
+    options.targetSearchRoot = targetSearchRoot;
+
+    auto result = model_helper::TransferAnimations(options);
+    if (!result.log.empty()) logLine(result.log);
+
+    setStatus(0.95f, OBF_CSTR("Cleaning up..."));
+    CleanupTempArtifacts(tempDir, tempVpk);
 
     finish(result.success, result.message);
 }
@@ -1436,6 +1519,9 @@ void LoadDecompilerState(DecompilerState& state) {
 
         LoadString(state.config.mergeTargetPath, sizeof(state.config.mergeTargetPath), j, "mergeTargetPath");
         LoadString(state.config.mergeTargetVpkEntry, sizeof(state.config.mergeTargetVpkEntry), j, "mergeTargetVpkEntry");
+
+        LoadString(state.config.transferTargetPath, sizeof(state.config.transferTargetPath), j, "transferTargetPath");
+        LoadString(state.config.transferTargetVpkEntry, sizeof(state.config.transferTargetVpkEntry), j, "transferTargetVpkEntry");
     }
 
 catch (const std::exception& e) {
@@ -1484,6 +1570,9 @@ void SaveDecompilerState(const DecompilerState& state) {
 
         SaveString(j, "mergeTargetPath", state.config.mergeTargetPath);
         SaveString(j, "mergeTargetVpkEntry", state.config.mergeTargetVpkEntry);
+
+        SaveString(j, "transferTargetPath", state.config.transferTargetPath);
+        SaveString(j, "transferTargetVpkEntry", state.config.transferTargetVpkEntry);
 
         std::ofstream file(settingsPath);
         if (file.is_open()) {
@@ -1854,6 +1943,55 @@ static void DrawModelHelperTab(std::shared_ptr<DecompilerState> state, bool busy
     }
     ImGui::PopStyleColor(3);
     if (!canMerge) ImGui::EndDisabled();
+    EndCard();
+
+    BeginCard(OBF_CSTR("Transfer Animations"));
+    ImGui::TextDisabled(OBF_CSTR("Replace source animations with mirror animations (same activity + activity modifiers) from a target model."));
+    ImGui::TextDisabled(OBF_CSTR("Animations without a mirror are renamed to <name>_MISSMATCH across the AnimationList."));
+    ImGui::TextDisabled(OBF_CSTR(".vmdl_c / .vpk targets are decompiled with all enchantments into a temp folder first."));
+    ImGui::Spacing();
+
+    PathInputWithBrowse(
+        OBF_CSTR("Target model (.vmdl / .vmdl_c / .vpk)"),
+        OBF_CSTR("##transfer_target"),
+        OBF_CSTR("##browse_transfer_target"),
+        state->config.transferTargetPath,
+        IM_ARRAYSIZE(state->config.transferTargetPath),
+        true,
+        "Model files (*.vmdl;*.vmdl_c;*.vpk)\0*.vmdl;*.vmdl_c;*.vpk\0All Files (*.*)\0*.*\0");
+
+    {
+        std::string targetStr = state->config.transferTargetPath;
+        std::transform(targetStr.begin(), targetStr.end(), targetStr.begin(),
+            [](unsigned char c) { return static_cast<char>(::tolower(c)); });
+        if (targetStr.size() >= 4 && targetStr.substr(targetStr.size() - 4) == ".vpk") {
+            ImGui::TextUnformatted(OBF_CSTR("Path inside VPK"));
+            ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+            ImGui::InputText(OBF_CSTR("##transfer_target_vpk_entry"), state->config.transferTargetVpkEntry, IM_ARRAYSIZE(state->config.transferTargetVpkEntry));
+            ImGui::TextDisabled(OBF_CSTR("e.g. models/heroes/axe/axe.vmdl"));
+        }
+    }
+
+    ImGui::Spacing();
+    bool canTransfer = !busy && !g_decompilerRunning.load() && !g_modelHelperRunning.load();
+    if (!canTransfer) ImGui::BeginDisabled();
+    ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.80f, 0.20f, 0.15f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.95f, 0.28f, 0.20f, 1.00f));
+    ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(0.65f, 0.16f, 0.12f, 1.00f));
+    if (ImGui::Button(OBF_CSTR("Transfer Animations"), ImVec2(140, 0))) {
+        {
+            std::lock_guard<std::mutex> lock(state->mutex);
+            state->busy = true;
+            state->showStatus = false;
+            state->status = OBF_CSTR("Transferring animations...");
+            state->progress = 0.0f;
+        }
+        g_modelHelperRunning.store(true);
+        SaveDecompilerState(*state);
+        std::thread(RunTransferAnimationsJob, state).detach();
+    }
+    ImGui::PopStyleColor(3);
+    if (!canTransfer) ImGui::EndDisabled();
     EndCard();
 }
 
