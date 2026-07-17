@@ -1,6 +1,6 @@
 # Dota2ModHelper
 
-A Windows desktop companion tool to [Dota2Changer](https://github.com/lighthurtsmyeyes/openchanger) for working with Dota 2 Source 2 assets. Built with Dear ImGui + DirectX 11, C++20, MSVC.
+A Windows desktop companion tool for working with Dota 2 Source 2 assets. Built with Dear ImGui + DirectX 11, C++20, MSVC.
 
 ## Features
 
