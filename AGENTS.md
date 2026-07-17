@@ -107,11 +107,15 @@ The `RestoreMorphs` enchantment (`DecompilerEnhancements.h`, flag `1 << 4`) rebu
 
 ### Pipeline
 
-1. Export the compiled model to glTF via the CLI: `-d --gltf_export_format gltf --gltf_export_animations` into a temp dir.
+1. Export the compiled model to glTF via the CLI: `-d --gltf_export_format gltf --gltf_export_animations` into a temp dir. The export may produce extra files (e.g. `<stem>_physics.gltf`, mesh-less) — pick the **largest** `.gltf`; directory-iteration order is unspecified.
 2. `gltfmorph::Load()` (`src/GltfMorph.cpp`) reads every primitive that carries morph targets. Target name = POSITION accessor `name` (VRF stores the flex name there; there is **no** `mesh.extras.targetNames` in VRF 15.0 exports), then generic `morph_<i>` fallback.
-3. Each render-mesh `.dmx` referenced by the `.vmdl` (`RenderMeshFile.filename`, found by regex) is matched to a glTF morph primitive by **bind-pose vertex count** (primary) and/or **mesh-name substring** (secondary). Unmatched meshes (e.g. lower LODs with no flex data) are skipped, never corrupted.
-4. Per mesh: `morphmerge::StripMorphs(doc)` → `morphmerge::Merge(doc, gm, opt, log)` → `morphmerge::WireCombinationOperatorToScene(doc)` → `dmxbin::WriteFile`.
-5. `Merge` emits, per morph target: one `DmeVertexDeltaData` (shape; sparse `position$0`/`normal$0` deltas + `position$0Indices`/`normal$0Indices`, threshold 1e-5) and one `DmeCombinationInputControl` (channel; `rawControlNames`, `flexMin`/`flexMax` 0..1). One `DmeCombinationOperator` references all channels (`controls`) and the mesh (`targets`); the mesh gets `deltaStates`/`deltaStateWeights(Lagged)`/`baseStates`/`bindState` patched. The operator is linked to the scene root so resourcecompiler discovers the flex controllers.
+3. **Every `DmeMesh` element** in each render-mesh `.dmx` referenced by the `.vmdl` (`RenderMeshFile.filename`, found by regex) is matched to a glTF morph primitive by **bind-pose vertex count** (primary) and/or **mesh-name substring** (secondary). A single `.dmx` can hold several mesh groups (e.g. drow arcana's face 4627-vert + eye-shadow overlay 772-vert, both named identically) — each group has its own glTF primitive with morph targets, and each needs its own `deltaStates`. Unmatched meshes (e.g. lower LODs with no flex data) are skipped, never corrupted.
+4. Per file: `morphmerge::StripMorphs(doc)` → `morphmerge::Merge(doc, targets, opt, log)` → `morphmerge::WireCombinationOperatorToScene(doc)` → `dmxbin::WriteFile`.
+5. `Merge` emits, per morph target: one `DmeVertexDeltaData` (shape; sparse `position$0`/`normal$0` deltas + `position$0Indices`/`normal$0Indices`, threshold 1e-5) and one `DmeCombinationInputControl` (channel; `rawControlNames`, `flexMin`/`flexMax` 0..1). One `DmeCombinationOperator` references all channels (`controls`) and **all** patched meshes (`targets`); each mesh gets `deltaStates`/`deltaStateWeights(Lagged)`/`baseStates`/`bindState` patched. The operator is linked to the scene root so resourcecompiler discovers the flex controllers.
+
+### Multi-mesh files — CRITICAL crash invariant
+
+**Every `DmeMesh` in a written `.dmx` must keep its `baseStates` attribute.** `StripMorphs` must never clear it: it is the bind-pose reference, not a morph attr. If a second mesh group in the same file loses `baseStates` (which happened when `StripMorphs` cleared it on all meshes while `Merge` re-added it only to the first), `resourcecompiler.exe` — and ModelDoc opening the model — crashes with an access violation (reproduced with `models/items/drow/drow_arcana/drow_arcana.vmdl_c`; fixed by keeping `baseStates` and merging all mesh groups in one `Merge` call with a shared operator). Verified: fixed output compiles (`OK: 2 compiled`) and produces the `_vmorf.vtex` GPU morph texture + MVTX blocks; single-mesh regression (lina) unchanged.
 
 ### Coordinate space — CRITICAL invariant
 
@@ -123,7 +127,7 @@ Therefore `MorphMerge::Options::applyAxisTransform` **must stay `false`**. The `
 
 - Shapes and channels are paired 1:1 **by name**, both derived from the same glTF morph target in the same loop, so index order always matches.
 - Combination/corrective shapes (names containing `"__"`, e.g. `browLowerer__noseWrinkler`) are kept as `deltaStates` **only** — no channel; the model compiler infers the corrective rule from the `"__"` name.
-- Targets with no non-zero deltas are skipped entirely (neither shape nor channel).
+- Channels are built once from the first merged mesh's target list (all non-corrective names); VRF exports every mesh group of a model with the same target list. Per mesh, a target with no non-zero deltas is skipped as a **shape** for that mesh only (e.g. the eye-shadow overlay has no jaw verts, so it gets 12 shapes instead of 117) — the shared channel remains, and the compiler pairs shapes to channels by name.
 
 ### Verification (no test suite)
 

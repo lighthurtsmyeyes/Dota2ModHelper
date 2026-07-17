@@ -582,8 +582,15 @@ bool ApplyMorphMergeToOutput(const std::string& outputPath,
     }
 
     fs::path gltfPath;
+    uintmax_t gltfBest = 0;
     for (const auto& entry : fs::recursive_directory_iterator(tempDir, ec)) {
-        if (entry.is_regular_file(ec) && entry.path().extension() == ".gltf") { gltfPath = entry.path(); break; }
+        // The export can produce extra .gltf files (e.g. <stem>_physics.gltf,
+        // which has no meshes); directory iteration order is unspecified, so
+        // pick the largest .gltf — that is the model export with morph data.
+        if (entry.is_regular_file(ec) && entry.path().extension() == ".gltf") {
+            uintmax_t sz = entry.file_size(ec);
+            if (gltfPath.empty() || sz > gltfBest) { gltfPath = entry.path(); gltfBest = sz; }
+        }
     }
     if (gltfPath.empty()) {
         fs::remove_all(tempDir, ec);
@@ -605,9 +612,12 @@ bool ApplyMorphMergeToOutput(const std::string& outputPath,
             " morphTargets=" + std::to_string(gm.targets.size()));
     }
 
-    // 5) For each render mesh, match it to a glTF morph primitive (by bind vertex count
-    //    and/or mesh name) and merge. Meshes with no matching primitive (e.g. lower LODs
-    //    that carry no flex data) are skipped rather than corrupted with mismatched deltas.
+    // 5) For each render mesh, match every DmeMesh element in it to a glTF morph
+    //    primitive (by bind vertex count and/or mesh name) and merge them all in
+    //    one pass. A single .dmx can hold several mesh groups (e.g. face + eye
+    //    shadow overlay), each with its own glTF primitive carrying morph targets.
+    //    Meshes with no matching primitive (e.g. lower LODs that carry no flex
+    //    data) are skipped rather than corrupted with mismatched deltas.
     std::vector<bool> used(gmeshes.size(), false);
     int mergedCount = 0, skippedCount = 0;
     morphmerge::Options opt;
@@ -618,47 +628,57 @@ bool ApplyMorphMergeToOutput(const std::string& outputPath,
         if (!dmxbin::ReadFile(meshPath.string(), doc, derr)) {
             append("Morph:   read failed: " + derr); ++skippedCount; continue;
         }
-        int bindVerts = morphmerge::GetBindVertexCount(doc);
-        std::string meshName = morphmerge::GetMeshName(doc);
 
-        int pick = -1;
-        for (size_t gi = 0; gi < gmeshes.size() && pick < 0; ++gi) {
-            if (used[gi]) continue;
-            const auto& gm = gmeshes[gi];
-            bool vmatch = (bindVerts > 0 && gm.vertexCount == bindVerts);
-            bool nmatch = (!meshName.empty() && (icontains(meshName, gm.name) || icontains(gm.name, meshName)));
-            if (vmatch && nmatch) pick = (int)gi;
-        }
-        if (pick < 0 && bindVerts > 0) {
-            int cand = -1, nC = 0;
-            for (size_t gi = 0; gi < gmeshes.size(); ++gi) {
-                if (used[gi]) continue;
-                if (gmeshes[gi].vertexCount == bindVerts) { cand = (int)gi; ++nC; }
-            }
-            if (nC == 1) pick = cand;
-        }
-        if (pick < 0 && bindVerts <= 0 && !meshName.empty()) {
+        std::vector<morphmerge::MeshTarget> fileTargets;
+        for (int meshElem : morphmerge::GetMeshElements(doc)) {
+            int bindVerts = morphmerge::GetBindVertexCount(doc, meshElem);
+            std::string meshName = morphmerge::GetMeshName(doc, meshElem);
+
+            int pick = -1;
             for (size_t gi = 0; gi < gmeshes.size() && pick < 0; ++gi) {
                 if (used[gi]) continue;
                 const auto& gm = gmeshes[gi];
-                if (icontains(meshName, gm.name) || icontains(gm.name, meshName)) pick = (int)gi;
+                bool vmatch = (bindVerts > 0 && gm.vertexCount == bindVerts);
+                bool nmatch = (!meshName.empty() && (icontains(meshName, gm.name) || icontains(gm.name, meshName)));
+                if (vmatch && nmatch) pick = (int)gi;
             }
+            if (pick < 0 && bindVerts > 0) {
+                int cand = -1, nC = 0;
+                for (size_t gi = 0; gi < gmeshes.size(); ++gi) {
+                    if (used[gi]) continue;
+                    if (gmeshes[gi].vertexCount == bindVerts) { cand = (int)gi; ++nC; }
+                }
+                if (nC == 1) pick = cand;
+            }
+            if (pick < 0 && bindVerts <= 0 && !meshName.empty()) {
+                for (size_t gi = 0; gi < gmeshes.size() && pick < 0; ++gi) {
+                    if (used[gi]) continue;
+                    const auto& gm = gmeshes[gi];
+                    if (icontains(meshName, gm.name) || icontains(gm.name, meshName)) pick = (int)gi;
+                }
+            }
+
+            if (pick < 0) {
+                append("Morph:   mesh '" + meshName + "' skipped (no glTF morph primitive matches bindVerts=" +
+                    std::to_string(bindVerts) + ")");
+                continue;
+            }
+
+            used[pick] = true;
+            append("Morph:   mesh '" + meshName + "' matched glTF '" + gmeshes[pick].name + "' verts=" +
+                std::to_string(gmeshes[pick].vertexCount) + " targets=" + std::to_string(gmeshes[pick].targets.size()));
+            fileTargets.push_back(morphmerge::MeshTarget{ meshElem, &gmeshes[pick] });
         }
 
-        if (pick < 0) {
-            append("Morph:   skipped (no glTF morph primitive matches bindVerts=" +
-                std::to_string(bindVerts) + " name='" + meshName + "')");
+        if (fileTargets.empty()) {
+            append("Morph:   skipped (no DmeMesh matched any glTF morph primitive)");
             ++skippedCount;
             continue;
         }
 
-        used[pick] = true;
-        const gltfmorph::GltfMesh& gm = gmeshes[pick];
-        append("Morph:   matched glTF '" + gm.name + "' verts=" +
-            std::to_string(gm.vertexCount) + " targets=" + std::to_string(gm.targets.size()));
         morphmerge::StripMorphs(doc);
         std::string mlog;
-        if (!morphmerge::Merge(doc, gm, opt, mlog)) {
+        if (!morphmerge::Merge(doc, fileTargets, opt, mlog)) {
             append("Morph:   merge failed: " + mlog); ++skippedCount; continue;
         }
         append("Morph:   " + mlog);
