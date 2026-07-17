@@ -54,7 +54,7 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <PropertyGroup>
-    <OutDir>$(ProjectDir)$(Platform)\$(Configuration)\</OutDir>
+    <OutDir>$(ProjectDir)$(Platform)\$(Configuration)\bin</OutDir>
     <IntDir>$(ProjectDir)$(Platform)\$(Configuration)\</IntDir>
     <LocalDebuggerWorkingDirectory>$(ProjectDir)</LocalDebuggerWorkingDirectory>
   </PropertyGroup>
@@ -168,6 +168,7 @@
     <ClCompile Include="src\DecompilerUI.cpp" />
     <ClCompile Include="src\ModelHelper.cpp" />
     <ClCompile Include="src\DecompilerEnhancements.cpp" />
+    <ClCompile Include="src\ClothSimRestore.cpp" />
     <ClCompile Include="src\DmxBinary.cpp" />
     <ClCompile Include="src\GltfMorph.cpp" />
     <ClCompile Include="src\MorphMerge.cpp" />
@@ -188,7 +189,6 @@
     <ClInclude Include="libs\imgui\imstb_truetype.h" />
     <ClInclude Include="src\PathValidator.h" />
     <ClInclude Include="src\Result.h" />
-    <ClInclude Include="src\SecurityHardening.h" />
     <ClInclude Include="src\Structures.h" />
     <ClInclude Include="src\VPKManager.h" />
     <ClInclude Include="src\CrashLogger.h" />
@@ -197,6 +197,7 @@
     <ClInclude Include="src\DecompilerUI.h" />
     <ClInclude Include="src\ModelHelper.h" />
     <ClInclude Include="src\DecompilerEnhancements.h" />
+    <ClInclude Include="src\ClothSimRestore.h" />
     <ClInclude Include="src\DmxBinary.h" />
     <ClInclude Include="src\GltfMorph.h" />
     <ClInclude Include="src\MorphMerge.h" />

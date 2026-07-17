@@ -180,7 +180,7 @@ namespace skin_parser {
     struct VirtualSlot {
         std::string name;
         std::string display_name;
-        std::string id = OBF_CSTR("-1");
+        std::string id = "-1";
         bool is_virtual = true;
         std::string image_vpk_path;
         std::string ability_name;

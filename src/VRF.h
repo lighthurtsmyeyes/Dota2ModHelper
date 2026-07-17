@@ -5,7 +5,6 @@
 #include <curl/curl.h>
 #include <zip.h>
 #include <filesystem>
-#include "SecurityHardening.h"
 
 namespace fs = std::filesystem;
 
@@ -18,9 +17,9 @@ public:
     static bool IsSetupNeeded();
     void Decompile(std::string args);
     bool DecompileWithOutput(std::string args, std::string& outLog);
-    void Decompile(std::string input, std::string output, std::string args = OBF_CSTR(""));
+    void Decompile(std::string input, std::string output, std::string args = "");
     bool DecompileWithOutput(std::string input, std::string output, std::string args, std::string& outLog);
-    bool DecompileBlock(std::string input, std::string block_name, std::string& output, std::string args = OBF_CSTR(""));
+    bool DecompileBlock(std::string input, std::string block_name, std::string& output, std::string args = "");
 
 	static void TerminateLingeringDecompilerProcesses();
     static void TerminateAllDecompilerProcesses();

@@ -6,16 +6,6 @@
 #include <cstring>
 #include <utility>
 #include <iostream>
-#include "SecurityHardening.h"
-namespace {
-__declspec(noinline) void SH_AD_VPKManager() noexcept {
-    if (SH_HardwareBreakpoints()) g_integritySeed ^= 0x99AABBCC;
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
-}
-}
 
 
 // ============================================================================
@@ -25,17 +15,9 @@ thread_local bool m_inVPKOperation = false;
 
 struct VPKOperationGuard {
     VPKOperationGuard() {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk; m_inVPKOperation = true; }
+    m_inVPKOperation = true; }
     ~VPKOperationGuard() {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk; m_inVPKOperation = false; }
+    m_inVPKOperation = false; }
     VPKOperationGuard(const VPKOperationGuard&) = delete;
     VPKOperationGuard& operator=(const VPKOperationGuard&) = delete;
 };
@@ -45,11 +27,6 @@ struct VPKOperationGuard {
 // ============================================================================
 VPKManager& VPKManager::GetInstance()
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     static VPKManager instance;
     return instance;
 }
@@ -64,22 +41,12 @@ VPKManager::~VPKManager()
 // ============================================================================
 void VPKManager::SetMaxCacheSize(size_t maxEntries)
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::unique_lock<std::shared_mutex> lock(m_cacheMutex);
     m_maxCacheSize = maxEntries > 0 ? maxEntries : 10;
 }
 
 void VPKManager::ClearCache()
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::unique_lock<std::shared_mutex> lock(m_cacheMutex);
     // Сначала сохраняем все изменённые VPK
     for (auto& [path, entry] : m_vpkCache) {
@@ -95,11 +62,6 @@ void VPKManager::ClearCache()
 
 void VPKManager::ClearCacheEntry(const std::string& vpkPath)
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::unique_lock<std::shared_mutex> lock(m_cacheMutex);
     auto it = m_vpkCache.find(vpkPath);
     if (it != m_vpkCache.end()) {
@@ -114,11 +76,6 @@ void VPKManager::ClearCacheEntry(const std::string& vpkPath)
 
 Result<void, std::string> VPKManager::FlushCacheEntry(const std::string& vpkPath)
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::unique_lock<std::shared_mutex> lock(m_cacheMutex);
     auto it = m_vpkCache.find(vpkPath);
     if (it == m_vpkCache.end()) {
@@ -129,7 +86,7 @@ Result<void, std::string> VPKManager::FlushCacheEntry(const std::string& vpkPath
         fs::path savePath(vpkPath);
         if (!it->second.vpk->bake(savePath.parent_path().string(), {}, nullptr)) {
             return Result<void, std::string>::Err(
-                OBF_CSTR("Failed to bake VPK: ") + vpkPath
+                "Failed to bake VPK: " + vpkPath
             );
         }
         it->second.isModified.store(false);
@@ -139,11 +96,6 @@ Result<void, std::string> VPKManager::FlushCacheEntry(const std::string& vpkPath
 
 VPKManager::CacheStats VPKManager::GetCacheStats() const
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::shared_lock<std::shared_mutex> lock(m_cacheMutex);
     double hitRate = 0.0;
     size_t hits = m_cacheHits.load(std::memory_order_relaxed);
@@ -163,11 +115,6 @@ VPKManager::CacheStats VPKManager::GetCacheStats() const
 
 void VPKManager::EvictOldCacheEntries()
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     // Требует уже захваченного m_cacheMutex (unique_lock)
     while (m_vpkCache.size() >= m_maxCacheSize) {
         // Находим наименее используемую запись (LRU)
@@ -200,11 +147,6 @@ void VPKManager::EvictOldCacheEntries()
 // ============================================================================
 std::recursive_mutex& VPKManager::GetVPKLock(const std::string& vpkPath)
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> lock(m_locksMutex);
     auto it = m_vpkLocks.find(vpkPath);
     if (it == m_vpkLocks.end()) {
@@ -215,11 +157,6 @@ std::recursive_mutex& VPKManager::GetVPKLock(const std::string& vpkPath)
 
 vpkpp::PackFile* VPKManager::GetOrCreateVPK(const std::string& vpkPath)
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     // Быстрая проверка через shared_lock для чтения
     {
         std::shared_lock<std::shared_mutex> readLock(m_cacheMutex);
@@ -274,23 +211,18 @@ Result<void, std::string> VPKManager::CreateVPK(
     const std::vector<FileEntry>& files
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (path.empty()) {
-        return Result<void, std::string>::Err(OBF_CSTR("VPK path is empty"));
+        return Result<void, std::string>::Err("VPK path is empty");
     }
 
     if (path.length() > MAX_VPK_PATH_LENGTH) {
-        return Result<void, std::string>::Err(OBF_CSTR("VPK path too long"));
+        return Result<void, std::string>::Err("VPK path too long");
     }
 
     fs::path fpath(path);
-    if (!PathValidator::HasValidExtension(fpath, { OBF_CSTR(".vpk") })) {
+    if (!PathValidator::HasValidExtension(fpath, { ".vpk" })) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("Invalid VPK extension: ") + fpath.extension().string()
+            "Invalid VPK extension: " + fpath.extension().string()
         );
     }
 
@@ -298,7 +230,7 @@ Result<void, std::string> VPKManager::CreateVPK(
         std::error_code ec;
         if (!fs::create_directories(fpath.parent_path(), ec)) {
             return Result<void, std::string>::Err(
-                OBF_CSTR("Cannot create VPK directory: ") + ec.message()
+                "Cannot create VPK directory: " + ec.message()
             );
         }
     }
@@ -307,7 +239,7 @@ Result<void, std::string> VPKManager::CreateVPK(
         auto VPK = vpkpp::VPK::create(fpath.filename().string(), 2);
         if (!VPK) {
             return Result<void, std::string>::Err(
-                OBF_CSTR("Failed to create VPK archive: ") + fpath.filename().string()
+                "Failed to create VPK archive: " + fpath.filename().string()
             );
         }
 
@@ -341,13 +273,13 @@ Result<void, std::string> VPKManager::CreateVPK(
         }
         else {
             return Result<void, std::string>::Err(
-                OBF_CSTR("Failed to save VPK archive: ") + fpath.filename().string()
+                "Failed to save VPK archive: " + fpath.filename().string()
             );
         }
     }
     catch (const std::exception& e) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("Exception while creating VPK: ") + std::string(e.what())
+            "Exception while creating VPK: " + std::string(e.what())
         );
     }
 }
@@ -357,26 +289,21 @@ Result<FileData, std::string> VPKManager::GetFileFromVPK(
     const std::string& vpkFilePath
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (vpkPath.empty()) {
-        return Result<FileData, std::string>::Err(OBF_CSTR("VPK path is empty"));
+        return Result<FileData, std::string>::Err("VPK path is empty");
     }
     if (vpkFilePath.empty()) {
-        return Result<FileData, std::string>::Err(OBF_CSTR("File path is empty"));
+        return Result<FileData, std::string>::Err("File path is empty");
     }
     if (vpkPath.length() > MAX_VPK_PATH_LENGTH) {
-        return Result<FileData, std::string>::Err(OBF_CSTR("VPK path too long"));
+        return Result<FileData, std::string>::Err("VPK path too long");
     }
     if (vpkFilePath.length() > MAX_FILE_PATH_LENGTH) {
-        return Result<FileData, std::string>::Err(OBF_CSTR("File path too long"));
+        return Result<FileData, std::string>::Err("File path too long");
     }
     if (!fs::exists(vpkPath)) {
         return Result<FileData, std::string>::Err(
-            OBF_CSTR("VPK file does not exist: ") + vpkPath
+            "VPK file does not exist: " + vpkPath
         );
     }
 
@@ -388,14 +315,14 @@ Result<FileData, std::string> VPKManager::GetFileFromVPK(
     auto* VPK = GetOrCreateVPK(vpkPath);
     if (!VPK) {
         return Result<FileData, std::string>::Err(
-            OBF_CSTR("Failed to open VPK: ") + vpkPath
+            "Failed to open VPK: " + vpkPath
         );
     }
 
     auto data = VPK->readEntry(vpkFilePath);
     if (!data || data->empty()) {
         return Result<FileData, std::string>::Err(
-            OBF_CSTR("File not found in VPK: ") + vpkFilePath
+            "File not found in VPK: " + vpkFilePath
         );
     }
 
@@ -408,13 +335,8 @@ Result<void, std::string> VPKManager::SaveFileFromVPK(
     const std::string& diskFilePath
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (diskFilePath.empty()) {
-        return Result<void, std::string>::Err(OBF_CSTR("Disk file path is empty"));
+        return Result<void, std::string>::Err("Disk file path is empty");
     }
 
     fs::path dstPath(diskFilePath);
@@ -422,7 +344,7 @@ Result<void, std::string> VPKManager::SaveFileFromVPK(
         std::error_code ec;
         if (!fs::create_directories(dstPath.parent_path(), ec)) {
             return Result<void, std::string>::Err(
-                OBF_CSTR("Cannot create output directory: ") + ec.message()
+                "Cannot create output directory: " + ec.message()
             );
         }
     }
@@ -440,16 +362,11 @@ Result<void, std::string> VPKManager::SaveFileFromData(
     const std::string& diskFilePath
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (!data || data->empty()) {
-        return Result<void, std::string>::Err(OBF_CSTR("No data to save"));
+        return Result<void, std::string>::Err("No data to save");
     }
     if (diskFilePath.empty()) {
-        return Result<void, std::string>::Err(OBF_CSTR("Disk file path is empty"));
+        return Result<void, std::string>::Err("Disk file path is empty");
     }
 
     fs::path dstPath(diskFilePath);
@@ -457,7 +374,7 @@ Result<void, std::string> VPKManager::SaveFileFromData(
         std::error_code ec;
         if (!fs::create_directories(dstPath.parent_path(), ec)) {
             return Result<void, std::string>::Err(
-                OBF_CSTR("Cannot create output directory: ") + ec.message()
+                "Cannot create output directory: " + ec.message()
             );
         }
     }
@@ -466,7 +383,7 @@ Result<void, std::string> VPKManager::SaveFileFromData(
         std::ofstream temp(dstPath.string(), std::ios::binary);
         if (!temp.is_open()) {
             return Result<void, std::string>::Err(
-                OBF_CSTR("Cannot open file for writing: ") + diskFilePath
+                "Cannot open file for writing: " + diskFilePath
             );
         }
 
@@ -476,7 +393,7 @@ Result<void, std::string> VPKManager::SaveFileFromData(
 
         if (temp.fail()) {
             return Result<void, std::string>::Err(
-                OBF_CSTR("Failed to write file: ") + diskFilePath
+                "Failed to write file: " + diskFilePath
             );
         }
 
@@ -484,7 +401,7 @@ Result<void, std::string> VPKManager::SaveFileFromData(
     }
     catch (const std::exception& e) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("Error saving file: ") + std::string(e.what())
+            "Error saving file: " + std::string(e.what())
         );
     }
 }
@@ -499,11 +416,6 @@ Result<void, std::string> VPKManager::AddFileToVPK(
     bool deferBake
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     // Защита от рекурсии
     if (m_inVPKOperation) {
         return AddFileToVPKDeferred(vpkPath, vpkFilePath, data, deferBake);
@@ -522,17 +434,17 @@ Result<void, std::string> VPKManager::AddFileToVPK(
 
         // === ВАЛИДАЦИЯ ПАРАМЕТРОВ ===
         if (vpkPath.empty()) {
-            return Result<void, std::string>::Err(OBF_CSTR("VPK path is empty"));
+            return Result<void, std::string>::Err("VPK path is empty");
         }
         if (vpkFilePath.empty()) {
-            return Result<void, std::string>::Err(OBF_CSTR("File path is empty"));
+            return Result<void, std::string>::Err("File path is empty");
         }
         if (!data || data->empty()) {
-            return Result<void, std::string>::Err(OBF_CSTR("No data to add"));
+            return Result<void, std::string>::Err("No data to add");
         }
         if (!fs::exists(vpkPath)) {
             return Result<void, std::string>::Err(
-                OBF_CSTR("VPK file does not exist: ") + vpkPath
+                "VPK file does not exist: " + vpkPath
             );
         }
 
@@ -542,7 +454,7 @@ Result<void, std::string> VPKManager::AddFileToVPK(
 
         auto* VPK = GetOrCreateVPK(vpkPath);
         if (!VPK) {
-            return Result<void, std::string>::Err(OBF_CSTR("Failed to open VPK: ") + vpkPath);
+            return Result<void, std::string>::Err("Failed to open VPK: " + vpkPath);
         }
 
         try {
@@ -566,7 +478,7 @@ Result<void, std::string> VPKManager::AddFileToVPK(
             if (!deferBake) {
                 fs::path savePath(vpkPath);
                 if (!VPK->bake(savePath.parent_path().string(), {}, nullptr)) {
-                    return Result<void, std::string>::Err(OBF_CSTR("Failed to save VPK: ") + vpkPath);
+                    return Result<void, std::string>::Err("Failed to save VPK: " + vpkPath);
                 }
             }
 
@@ -574,15 +486,15 @@ Result<void, std::string> VPKManager::AddFileToVPK(
         }
         catch (const std::exception& e) {
             return Result<void, std::string>::Err(
-                OBF_CSTR("Exception in AddFileToVPK: ") + std::string(e.what()) +
-                OBF_CSTR(" | vpkPath: ") + vpkPath +
-                OBF_CSTR(" | vpkFilePath: ") + vpkFilePath
+                "Exception in AddFileToVPK: " + std::string(e.what()) +
+                " | vpkPath: " + vpkPath +
+                " | vpkFilePath: " + vpkFilePath
             );
         }
     }
     catch (...) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("Unknown exception in AddFileToVPK")
+            "Unknown exception in AddFileToVPK"
         );
     }
 }
@@ -597,18 +509,13 @@ Result<void, std::string> VPKManager::AddFileToVPKDeferred(
     bool deferBake
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     // Добавляем в очередь отложенных операций
     std::lock_guard<std::mutex> lock(m_deferredMutex);
 
     // Проверка на переполнение очереди (защита от утечки памяти)
     if (m_deferredOperations.size() > 10000) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("Deferred operations queue overflow (>10000 operations)")
+            "Deferred operations queue overflow (>10000 operations)"
         );
     }
 
@@ -621,11 +528,6 @@ Result<void, std::string> VPKManager::AddFileToVPKDeferred(
 // ============================================================================
 void VPKManager::ProcessDeferredOperations()
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     // Быстрая проверка без блокировки
     {
         std::lock_guard<std::mutex> lock(m_deferredMutex);
@@ -659,11 +561,6 @@ void VPKManager::ProcessDeferredOperations()
 // ============================================================================
 size_t VPKManager::GetDeferredOperationsCount() const
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> lock(const_cast<std::mutex&>(m_deferredMutex));
     return m_deferredOperations.size();
 }
@@ -674,11 +571,6 @@ Result<void, std::string> VPKManager::AddFileToVPK(
     const std::string& diskFilePath
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     auto readResult = ReadFileFromDisk(diskFilePath);
     if (readResult.IsErr()) {
         return Result<void, std::string>::Err(readResult.Error());
@@ -692,17 +584,12 @@ Result<void, std::string> VPKManager::ExecForEntries(
     const vpkpp::PackFile::EntryCallback& callback
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (vpkPath.empty()) {
-        return Result<void, std::string>::Err(OBF_CSTR("VPK path is empty"));
+        return Result<void, std::string>::Err("VPK path is empty");
     }
     if (!fs::exists(vpkPath)) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("VPK file does not exist: ") + vpkPath
+            "VPK file does not exist: " + vpkPath
         );
     }
 
@@ -713,7 +600,7 @@ Result<void, std::string> VPKManager::ExecForEntries(
     auto* VPK = GetOrCreateVPK(vpkPath);
     if (!VPK) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("Failed to open VPK: ") + vpkPath
+            "Failed to open VPK: " + vpkPath
         );
     }
 
@@ -723,7 +610,7 @@ Result<void, std::string> VPKManager::ExecForEntries(
     }
     catch (const std::exception& e) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("Error executing callback: ") + std::string(e.what())
+            "Error executing callback: " + std::string(e.what())
         );
     }
 }
@@ -733,20 +620,15 @@ Result<bool, std::string> VPKManager::isValid(
     const std::string& vpkFilePath
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (vpkPath.empty()) {
-        return Result<bool, std::string>::Err(OBF_CSTR("VPK path is empty"));
+        return Result<bool, std::string>::Err("VPK path is empty");
     }
     if (vpkFilePath.empty()) {
-        return Result<bool, std::string>::Err(OBF_CSTR("File path is empty"));
+        return Result<bool, std::string>::Err("File path is empty");
     }
     if (!fs::exists(vpkPath)) {
         return Result<bool, std::string>::Err(
-            OBF_CSTR("VPK file does not exist: ") + vpkPath
+            "VPK file does not exist: " + vpkPath
         );
     }
 
@@ -757,7 +639,7 @@ Result<bool, std::string> VPKManager::isValid(
     auto* VPK = GetOrCreateVPK(vpkPath);
     if (!VPK) {
         return Result<bool, std::string>::Err(
-            OBF_CSTR("Failed to open VPK: ") + vpkPath
+            "Failed to open VPK: " + vpkPath
         );
     }
 
@@ -778,24 +660,19 @@ Result<bool, std::string> VPKManager::isValid(
 // ============================================================================
 Result<void, std::string> VPKManager::BeginBatch(const std::string& vpkPath)
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> batchLock(m_batchMutex);
     if (m_activeBatch && m_activeBatch->isActive) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("Batch already active for: ") + m_activeBatch->vpkPath
+            "Batch already active for: " + m_activeBatch->vpkPath
         );
     }
 
     if (vpkPath.empty()) {
-        return Result<void, std::string>::Err(OBF_CSTR("VPK path is empty"));
+        return Result<void, std::string>::Err("VPK path is empty");
     }
     if (!fs::exists(vpkPath)) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("VPK file does not exist: ") + vpkPath
+            "VPK file does not exist: " + vpkPath
         );
     }
 
@@ -806,7 +683,7 @@ Result<void, std::string> VPKManager::BeginBatch(const std::string& vpkPath)
     auto* vpk = GetOrCreateVPK(vpkPath);
     if (!vpk) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("Failed to open VPK: ") + vpkPath
+            "Failed to open VPK: " + vpkPath
         );
     }
 
@@ -826,11 +703,6 @@ Result<void, std::string> VPKManager::AddFileToBatch(
     FileData data
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> batchLock(m_batchMutex);
     return AddFileToBatch_Unlocked(vpkFilePath, std::move(data));
 }
@@ -840,11 +712,6 @@ Result<void, std::string> VPKManager::AddFileToBatch(
     const std::string& diskFilePath
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     auto readResult = ReadFileFromDisk(diskFilePath);
     if (readResult.IsErr()) {
         return Result<void, std::string>::Err(readResult.Error());
@@ -856,17 +723,12 @@ Result<void, std::string> VPKManager::AddFileToBatch(
 
 Result<void, std::string> VPKManager::EndBatch()
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
 
     Result<void, std::string> result = Result<void, std::string>::Ok();
     {
         std::lock_guard<std::mutex> batchLock(m_batchMutex);
         if (!m_activeBatch || !m_activeBatch->isActive) {
-            return Result<void, std::string>::Err(OBF_CSTR("No active batch"));
+            return Result<void, std::string>::Err("No active batch");
         }
 
         auto& batch = *m_activeBatch;
@@ -896,7 +758,7 @@ Result<void, std::string> VPKManager::EndBatch()
             fs::path savePath(batch.vpkPath);
             if (!batch.vpk->bake(savePath.parent_path().string(), {}, nullptr)) {
                 result = Result<void, std::string>::Err(
-                    OBF_CSTR("Failed to save VPK: ") + batch.vpkPath
+                    "Failed to save VPK: " + batch.vpkPath
                 );
             }
 
@@ -918,7 +780,7 @@ Result<void, std::string> VPKManager::EndBatch()
             batch.pendingFiles.clear();
             m_activeBatch.reset();
             result = Result<void, std::string>::Err(
-                OBF_CSTR("Exception during batch end: ") + std::string(e.what())
+                "Exception during batch end: " + std::string(e.what())
             );
         }
     }
@@ -933,11 +795,6 @@ Result<void, std::string> VPKManager::EndBatch()
 
 bool VPKManager::IsBatchActive() const
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> batchLock(const_cast<std::mutex&>(m_batchMutex));
     return m_activeBatch && m_activeBatch->isActive;
 }
@@ -947,11 +804,6 @@ bool VPKManager::IsFileInBatch(
     const std::string& vpkFilePath
 ) const
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> batchLock(const_cast<std::mutex&>(m_batchMutex));
     if (!m_activeBatch || !m_activeBatch->isActive) {
         return false;
@@ -967,24 +819,19 @@ Result<FileData, std::string> VPKManager::GetFileFromBatch(
     const std::string& vpkFilePath
 ) const
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> batchLock(const_cast<std::mutex&>(m_batchMutex));
     if (!m_activeBatch || !m_activeBatch->isActive) {
-        return Result<FileData, std::string>::Err(OBF_CSTR("No active batch"));
+        return Result<FileData, std::string>::Err("No active batch");
     }
     if (m_activeBatch->vpkPath != vpkPath) {
-        return Result<FileData, std::string>::Err(OBF_CSTR("Batch is for a different VPK"));
+        return Result<FileData, std::string>::Err("Batch is for a different VPK");
     }
     auto it = m_activeBatch->pendingFiles.find(vpkFilePath);
     if (it == m_activeBatch->pendingFiles.end()) {
-        return Result<FileData, std::string>::Err(OBF_CSTR("File not found in batch"));
+        return Result<FileData, std::string>::Err("File not found in batch");
     }
     if (!it->second || it->second->empty()) {
-        return Result<FileData, std::string>::Err(OBF_CSTR("Batch file is empty"));
+        return Result<FileData, std::string>::Err("Batch file is empty");
     }
     return Result<FileData, std::string>::Ok(it->second);
 }
@@ -996,17 +843,12 @@ Result<FileData, std::string> VPKManager::ReadFileFromDisk(
     const std::string& diskFilePath
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (diskFilePath.empty()) {
-        return Result<FileData, std::string>::Err(OBF_CSTR("File path is empty"));
+        return Result<FileData, std::string>::Err("File path is empty");
     }
     if (!fs::exists(diskFilePath)) {
         return Result<FileData, std::string>::Err(
-            OBF_CSTR("File does not exist: ") + diskFilePath
+            "File does not exist: " + diskFilePath
         );
     }
 
@@ -1014,14 +856,14 @@ Result<FileData, std::string> VPKManager::ReadFileFromDisk(
         std::ifstream file(diskFilePath, std::ios::binary | std::ios::ate);
         if (!file.is_open()) {
             return Result<FileData, std::string>::Err(
-                OBF_CSTR("Cannot open file: ") + diskFilePath
+                "Cannot open file: " + diskFilePath
             );
         }
 
         auto size = file.tellg();
         if (size < 0 || static_cast<size_t>(size) > MAX_FILE_SIZE) {
             return Result<FileData, std::string>::Err(
-                OBF_CSTR("Invalid file size: ") + std::to_string(size)
+                "Invalid file size: " + std::to_string(size)
             );
         }
 
@@ -1035,13 +877,13 @@ Result<FileData, std::string> VPKManager::ReadFileFromDisk(
         }
         else {
             return Result<FileData, std::string>::Err(
-                OBF_CSTR("Failed to read file: ") + diskFilePath
+                "Failed to read file: " + diskFilePath
             );
         }
     }
     catch (const std::exception& e) {
         return Result<FileData, std::string>::Err(
-            OBF_CSTR("Error reading file: ") + std::string(e.what())
+            "Error reading file: " + std::string(e.what())
         );
     }
 }
@@ -1054,24 +896,19 @@ Result<void, std::string> VPKManager::AddFileToBatch_Unlocked(
     FileData data
 )
 {
-    SH_AD_VPKManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     // ПРЕДУСЛОВИЕ: m_batchMutex должен быть уже захвачен вызывающим кодом!
 
     if (!m_activeBatch || !m_activeBatch->isActive) {
         return Result<void, std::string>::Err(
-            OBF_CSTR("No active batch. Call BeginBatch() first")
+            "No active batch. Call BeginBatch() first"
         );
     }
 
     if (vpkFilePath.empty()) {
-        return Result<void, std::string>::Err(OBF_CSTR("File path is empty"));
+        return Result<void, std::string>::Err("File path is empty");
     }
     if (!data || data->empty()) {
-        return Result<void, std::string>::Err(OBF_CSTR("No data to add"));
+        return Result<void, std::string>::Err("No data to add");
     }
 
     m_activeBatch->pendingFiles[vpkFilePath] = std::move(data);

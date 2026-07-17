@@ -4,7 +4,6 @@
 #include <string>
 #include <optional>
 #include <stdexcept>
-#include "SecurityHardening.h"
 
 template<typename T, typename E = std::string>
 class Result {
@@ -28,35 +27,35 @@ public:
 
     T& Value()& {
         if (!m_hasValue) {
-            throw std::runtime_error(OBF_CSTR("Accessing error as value: ") + GetError());
+            throw std::runtime_error("Accessing error as value: " + GetError());
         }
         return *m_value;
     }
 
     const T& Value() const& {
         if (!m_hasValue) {
-            throw std::runtime_error(OBF_CSTR("Accessing error as value: ") + GetError());
+            throw std::runtime_error("Accessing error as value: " + GetError());
         }
         return *m_value;
     }
 
     T&& Value()&& {
         if (!m_hasValue) {
-            throw std::runtime_error(OBF_CSTR("Accessing error as value: ") + GetError());
+            throw std::runtime_error("Accessing error as value: " + GetError());
         }
         return std::move(*m_value);
     }
 
     E& Error()& {
         if (m_hasValue) {
-            throw std::runtime_error(OBF_CSTR("Accessing value as error"));
+            throw std::runtime_error("Accessing value as error");
         }
         return m_error;
     }
 
     const E& Error() const& {
         if (m_hasValue) {
-            throw std::runtime_error(OBF_CSTR("Accessing value as error"));
+            throw std::runtime_error("Accessing value as error");
         }
         return m_error;
     }
@@ -110,14 +109,14 @@ public:
 
     E& Error()& {
         if (m_success) {
-            throw std::runtime_error(OBF_CSTR("Accessing success as error"));
+            throw std::runtime_error("Accessing success as error");
         }
         return m_error;
     }
 
     const E& Error() const& {
         if (m_success) {
-            throw std::runtime_error(OBF_CSTR("Accessing success as error"));
+            throw std::runtime_error("Accessing success as error");
         }
         return m_error;
     }

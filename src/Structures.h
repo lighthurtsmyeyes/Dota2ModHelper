@@ -10,7 +10,6 @@
 #include <any>
 #include <functional>
 #include <optional>
-#include "SecurityHardening.h"
 
 namespace fs = std::filesystem;
 
@@ -34,7 +33,7 @@ struct Modification {
 	bool match_all_conditions = true;
 
 	std::string get_last_key() const {
-		return key_path.empty() ? OBF_CSTR("") : key_path.back();
+		return key_path.empty() ? "" : key_path.back();
 	}
 
 	std::vector<std::string> get_parent_keys() const {

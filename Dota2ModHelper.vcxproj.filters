@@ -53,6 +53,33 @@
     <ClCompile Include="libs\imgui\backends\imgui_impl_win32.cpp">
       <Filter>imgui</Filter>
     </ClCompile>
+    <ClCompile Include="src\CrashLogger.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\SteamManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\VRF.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\DecompilerUI.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\DecompilerEnhancements.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\parser\Logger.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\parser\ModelDecompiler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\parser\SkinDataManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="src\parser\Utils.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="src\VPKManager.h">
@@ -77,9 +104,6 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="src\Structures.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="src\SecurityHardening.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="libs\imgui\imgui.h">
@@ -107,6 +131,33 @@
       <Filter>imgui</Filter>
     </ClInclude>
     <ClInclude Include="libs\IconsFontAwesome6.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\CrashLogger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\SteamManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\VRF.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\DecompilerUI.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\DecompilerEnhancements.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\parser\Logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\parser\ModelDecompiler.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\parser\SkinDataManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="src\parser\Utils.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

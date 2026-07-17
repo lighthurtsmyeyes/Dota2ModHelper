@@ -1,5 +1,4 @@
 #include "DecompilerEnhancements.h"
-#include "SecurityHardening.h"
 #include "parser/ModelDecompiler.h"
 #include "parser/SkinDataManager.h"
 #include <algorithm>
@@ -1219,7 +1218,7 @@ bool ApplyEnhancements(const std::string& vmdlPath, const std::string& compiledI
 
     std::string vmdlText = ReadFile(vmdlPath);
     if (vmdlText.empty()) {
-        outLog = OBF_CSTR("Failed to read .vmdl file: ") + vmdlPath;
+        outLog = "Failed to read .vmdl file: " + vmdlPath;
         return false;
     }
 
@@ -1228,7 +1227,7 @@ bool ApplyEnhancements(const std::string& vmdlPath, const std::string& compiledI
     std::vector<SequenceInfo> sequences;
     std::string normalizedAseq = MaybeConvertUtf16ToUtf8(aseqBlockText);
     if (!ParseASEQBlock(normalizedAseq, order, poseParams, sequences)) {
-        outLog = OBF_CSTR("Failed to parse ASEQ block.");
+        outLog = "Failed to parse ASEQ block.";
         return false;
     }
 
@@ -1248,7 +1247,7 @@ bool ApplyEnhancements(const std::string& vmdlPath, const std::string& compiledI
     std::string prefix, suffix;
     std::vector<AnimBlock> blocks = ExtractAnimationBlocks(vmdlText, childrenStart, childrenEnd, prefix, suffix);
     if (blocks.empty()) {
-        outLog = OBF_CSTR("No AnimationList children found in .vmdl.");
+        outLog = "No AnimationList children found in .vmdl.";
         return false;
     }
 
@@ -1271,21 +1270,21 @@ bool ApplyEnhancements(const std::string& vmdlPath, const std::string& compiledI
     vmdlText = ApplyEnhancementsToAllAnimFiles(vmdlText, order, poseParams, sequenceMap, modifiers, weightLists, seqNameToAnimName, enchantmentFlags);
 
     if (!IsKV3Balanced(vmdlText)) {
-        outLog = OBF_CSTR("Patched .vmdl is not KV3-balanced; aborting write.");
+        outLog = "Patched .vmdl is not KV3-balanced; aborting write.";
         return false;
     }
 
     if (!WriteFile(vmdlPath, vmdlText)) {
-        outLog = OBF_CSTR("Failed to write patched .vmdl file.");
+        outLog = "Failed to write patched .vmdl file.";
         return false;
     }
 
-    outLog = OBF_CSTR("Applied enchantments to ") + vmdlPath +
-             OBF_CSTR(". Top-level blocks: ") + std::to_string(blocks.size()) +
-             OBF_CSTR(", animation blocks processed: ") + std::to_string(allAnimBlocks.size()) +
-             OBF_CSTR(", ASEQ order entries: ") + std::to_string(order.size()) +
-             OBF_CSTR(", weight lists restored: ") + std::to_string(weightLists.size()) +
-             OBF_CSTR(", blend animations restored: ") + std::to_string(sequenceMap.size()) + ". ";
+    outLog = "Applied enchantments to " + vmdlPath +
+             ". Top-level blocks: " + std::to_string(blocks.size()) +
+             ", animation blocks processed: " + std::to_string(allAnimBlocks.size()) +
+             ", ASEQ order entries: " + std::to_string(order.size()) +
+             ", weight lists restored: " + std::to_string(weightLists.size()) +
+             ", blend animations restored: " + std::to_string(sequenceMap.size()) + ". ";
     return true;
 }
 

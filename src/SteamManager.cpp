@@ -1,36 +1,16 @@
 #include "SteamManager.h"
 #include "Structures.h"
-#include "SecurityHardening.h"
-namespace {
-__declspec(noinline) void SH_AD_SteamManager() noexcept {
-    if (SH_PebBeingDebugged()) g_integritySeed ^= 0xAABBCCDD;
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
-}
-}
 
 
 namespace fs = std::filesystem;
 
 SteamManager& SteamManager::GetInstance()
 {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     static SteamManager instance;
     return instance;
 }
 
 bool SteamManager::validateSteamLibraryPath(const std::string& path) {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (path.empty()) return false;
 
     try {
@@ -41,13 +21,13 @@ bool SteamManager::validateSteamLibraryPath(const std::string& path) {
         }
 
         // Проверяем наличие папки steamapps/common - это основная характеристика библиотеки Steam
-        fs::path steamappsCommon = steamLibDir / OBF_CSTR("steamapps") / OBF_CSTR("common");
+        fs::path steamappsCommon = steamLibDir / "steamapps" / "common";
         if (!fs::exists(steamappsCommon) || !fs::is_directory(steamappsCommon)) {
             return false;
         }
 
         // Дополнительные проверки для уверенности
-        fs::path steamappsDir = steamLibDir / OBF_CSTR("steamapps");
+        fs::path steamappsDir = steamLibDir / "steamapps";
         if (!fs::exists(steamappsDir) || !fs::is_directory(steamappsDir)) {
             return false;
         }
@@ -60,11 +40,6 @@ bool SteamManager::validateSteamLibraryPath(const std::string& path) {
 }
 
 bool SteamManager::validateDotaPath(const std::string& path) const {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (path.empty()) return false;
 
     try {
@@ -76,13 +51,13 @@ bool SteamManager::validateDotaPath(const std::string& path) const {
         }
 
         // Проверяем наличие game/dota/pak01_dir.vpk
-        fs::path vpkPath = dotaDir / OBF_CSTR("game") / OBF_CSTR("dota") / OBF_CSTR("pak01_dir.vpk");
+        fs::path vpkPath = dotaDir / "game" / "dota" / "pak01_dir.vpk";
         if (!fs::exists(vpkPath)) {
             return false;
         }
 
         // Проверяем наличие папки game/dota_addons
-        fs::path addonsPath = dotaDir / OBF_CSTR("game") / OBF_CSTR("dota_addons");
+        fs::path addonsPath = dotaDir / "game" / "dota_addons";
         if (!fs::exists(addonsPath) || !fs::is_directory(addonsPath)) {
             return false;
         }
@@ -95,30 +70,25 @@ bool SteamManager::validateDotaPath(const std::string& path) const {
 }
 
 bool SteamManager::findInRegistry() {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     HKEY hKey;
     LONG result;
     DWORD bufferSize = MAX_PATH;
     char steamPath[MAX_PATH];
 
     std::vector<std::string> registryPaths = {
-        OBF_CSTR("Software\\Valve\\Steam"),
-        OBF_CSTR("Software\\Wow6432Node\\Valve\\Steam")
+        "Software\\Valve\\Steam",
+        "Software\\Wow6432Node\\Valve\\Steam"
     };
 
     bool found = false;
 
     for (const auto& regPath : registryPaths) {
         // Пробуем HKEY_CURRENT_USER
-        result = SH_RegOpenKeyExA(HKEY_CURRENT_USER, regPath.c_str(), 0, KEY_READ, &hKey);
+        result = RegOpenKeyExA(HKEY_CURRENT_USER, regPath.c_str(), 0, KEY_READ, &hKey);
         if (result == ERROR_SUCCESS) {
             DWORD bufferSize = MAX_PATH;
-            result = SH_RegQueryValueExA(hKey, OBF_CSTR("SteamPath"), NULL, NULL, (LPBYTE)steamPath, &bufferSize);
-            SH_RegCloseKey(hKey);
+            result = RegQueryValueExA(hKey, "SteamPath", NULL, NULL, (LPBYTE)steamPath, &bufferSize);
+            RegCloseKey(hKey);
 
             if (result == ERROR_SUCCESS) {
                 std::string path(steamPath);
@@ -136,11 +106,11 @@ bool SteamManager::findInRegistry() {
         }
 
         // Пробуем HKEY_LOCAL_MACHINE
-        result = SH_RegOpenKeyExA(HKEY_LOCAL_MACHINE, regPath.c_str(), 0, KEY_READ, &hKey);
+        result = RegOpenKeyExA(HKEY_LOCAL_MACHINE, regPath.c_str(), 0, KEY_READ, &hKey);
         if (result == ERROR_SUCCESS) {
             DWORD bufferSize = MAX_PATH;
-            result = SH_RegQueryValueExA(hKey, OBF_CSTR("SteamPath"), NULL, NULL, (LPBYTE)steamPath, &bufferSize);
-            SH_RegCloseKey(hKey);
+            result = RegQueryValueExA(hKey, "SteamPath", NULL, NULL, (LPBYTE)steamPath, &bufferSize);
+            RegCloseKey(hKey);
 
             if (result == ERROR_SUCCESS) {
                 std::string path(steamPath);
@@ -160,14 +130,9 @@ bool SteamManager::findInRegistry() {
 }
 
 bool SteamManager::findAdditionalLibraries(const std::string& steamInstallPath) {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     try {
         // Читаем libraryfolders.vdf для поиска дополнительных библиотек
-        fs::path libraryFoldersPath = fs::path(steamInstallPath) / OBF_CSTR("steamapps") / OBF_CSTR("libraryfolders.vdf");
+        fs::path libraryFoldersPath = fs::path(steamInstallPath) / "steamapps" / "libraryfolders.vdf";
 
         if (!fs::exists(libraryFoldersPath)) {
             return false;
@@ -187,9 +152,9 @@ bool SteamManager::findAdditionalLibraries(const std::string& steamInstallPath) 
                     std::string potentialPath = line.substr(start + 1, end - start - 1);
 
                     // Проверяем, является ли это путем (содержит :\ или /)
-                    if (potentialPath.find(OBF_CSTR(":")) != std::string::npos ||
-                        potentialPath.find(OBF_CSTR("/")) != std::string::npos ||
-                        potentialPath.find(OBF_CSTR("\\")) != std::string::npos) {
+                    if (potentialPath.find(":") != std::string::npos ||
+                        potentialPath.find("/") != std::string::npos ||
+                        potentialPath.find("\\") != std::string::npos) {
 
                         // Заменяем слеши если нужно
                         std::replace(potentialPath.begin(), potentialPath.end(), '/', '\\');
@@ -210,48 +175,43 @@ bool SteamManager::findAdditionalLibraries(const std::string& steamInstallPath) 
 }
 
 bool SteamManager::findInCommonLocations() {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::vector<std::string> commonPaths;
     bool found = false;
 
     // Стандартные расположения SteamLibrary
     char drivesBuffer[MAX_PATH];
-    DWORD drives = SH_GetLogicalDrives();
+    DWORD drives = GetLogicalDrives();
 
     for (char drive = 'A'; drive <= 'Z'; drive++) {
         if (drives & (1 << (drive - 'A'))) {
             // Проверяем различные возможные имена папок библиотек
-            std::string driveStr = std::string(1, drive) + OBF_CSTR(":");
+            std::string driveStr = std::string(1, drive) + ":";
 
-            commonPaths.push_back(driveStr + OBF_CSTR("\\SteamLibrary"));
-            commonPaths.push_back(driveStr + OBF_CSTR("\\Steam"));
-            commonPaths.push_back(driveStr + OBF_CSTR("\\Games\\Steam"));
-            commonPaths.push_back(driveStr + OBF_CSTR("\\Program Files\\Steam"));
-            commonPaths.push_back(driveStr + OBF_CSTR("\\Program Files (x86)\\Steam"));
-            commonPaths.push_back(driveStr + OBF_CSTR("\\SteamGames"));
-            commonPaths.push_back(driveStr + OBF_CSTR("\\Steam Games"));
+            commonPaths.push_back(driveStr + "\\SteamLibrary");
+            commonPaths.push_back(driveStr + "\\Steam");
+            commonPaths.push_back(driveStr + "\\Games\\Steam");
+            commonPaths.push_back(driveStr + "\\Program Files\\Steam");
+            commonPaths.push_back(driveStr + "\\Program Files (x86)\\Steam");
+            commonPaths.push_back(driveStr + "\\SteamGames");
+            commonPaths.push_back(driveStr + "\\Steam Games");
         }
     }
 
     // Также проверяем стандартные расположения Program Files
     char programFiles[MAX_PATH];
-    if (SH_SHGetFolderPathA(NULL, CSIDL_PROGRAM_FILES, NULL, SHGFP_TYPE_CURRENT, programFiles) == S_OK) {
-        commonPaths.push_back(std::string(programFiles) + OBF_CSTR("\\Steam"));
+    if (SHGetFolderPathA(NULL, CSIDL_PROGRAM_FILES, NULL, SHGFP_TYPE_CURRENT, programFiles) == S_OK) {
+        commonPaths.push_back(std::string(programFiles) + "\\Steam");
     }
 
     char programFilesX86[MAX_PATH];
-    if (SH_SHGetFolderPathA(NULL, CSIDL_PROGRAM_FILESX86, NULL, SHGFP_TYPE_CURRENT, programFilesX86) == S_OK) {
-        commonPaths.push_back(std::string(programFilesX86) + OBF_CSTR("\\Steam"));
+    if (SHGetFolderPathA(NULL, CSIDL_PROGRAM_FILESX86, NULL, SHGFP_TYPE_CURRENT, programFilesX86) == S_OK) {
+        commonPaths.push_back(std::string(programFilesX86) + "\\Steam");
     }
 
     // Проверяем пользовательские расположения
     char userProfile[MAX_PATH];
-    if (SH_SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, SHGFP_TYPE_CURRENT, userProfile) == S_OK) {
-        commonPaths.push_back(std::string(userProfile) + OBF_CSTR("\\Steam"));
+    if (SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, SHGFP_TYPE_CURRENT, userProfile) == S_OK) {
+        commonPaths.push_back(std::string(userProfile) + "\\Steam");
     }
 
     for (const auto& path : commonPaths) {
@@ -265,15 +225,10 @@ bool SteamManager::findInCommonLocations() {
 }
 
 void SteamManager::findAllDotaPaths() {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     dotaPaths.clear();
 
     for (const auto& steamPath : steamPaths) {
-        std::string potentialDotaPath = steamPath + OBF_CSTR("\\steamapps\\common\\dota 2 beta");
+        std::string potentialDotaPath = steamPath + "\\steamapps\\common\\dota 2 beta";
         if (validateDotaPath(potentialDotaPath)) {
             dotaPaths.push_back(potentialDotaPath);
         }
@@ -281,55 +236,50 @@ void SteamManager::findAllDotaPaths() {
 }
 
 void SteamManager::selectDotaPathInteractive() {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (dotaPaths.empty()) {
-        std::cout << OBF_CSTR("Dota 2 не найдена в автоматическом режиме.") << std::endl;
-        std::cout << OBF_CSTR("Пожалуйста, введите путь к Dota 2 вручную: ");
+        std::cout << "Dota 2 не найдена в автоматическом режиме." << std::endl;
+        std::cout << "Пожалуйста, введите путь к Dota 2 вручную: ";
         std::string manualPath;
         std::getline(std::cin, manualPath);
 
         if (validateDotaPath(manualPath)) {
             selectedDotaPath = manualPath;
-            std::cout << OBF_CSTR("Путь принят: ") << manualPath << std::endl;
+            std::cout << "Путь принят: " << manualPath << std::endl;
         }
         else {
-            std::cout << OBF_CSTR("Неверный путь к Dota 2!") << std::endl;
+            std::cout << "Неверный путь к Dota 2!" << std::endl;
         }
         return;
     }
 
     if (dotaPaths.size() == 1) {
         selectedDotaPath = dotaPaths[0];
-        std::cout << OBF_CSTR("Найдена одна установка Dota 2: ") << selectedDotaPath << std::endl;
+        std::cout << "Найдена одна установка Dota 2: " << selectedDotaPath << std::endl;
         return;
     }
 
     // Несколько путей найдено - предлагаем выбор
-    std::cout << OBF_CSTR("Найдено несколько установок Dota 2:") << std::endl;
+    std::cout << "Найдено несколько установок Dota 2:" << std::endl;
     for (size_t i = 0; i < dotaPaths.size(); ++i) {
-        std::cout << i + 1 << OBF_CSTR(": ") << dotaPaths[i] << std::endl;
+        std::cout << i + 1 << ": " << dotaPaths[i] << std::endl;
     }
 
-    std::cout << OBF_CSTR("Выберите номер установки (1-") << dotaPaths.size() << OBF_CSTR("): ");
+    std::cout << "Выберите номер установки (1-" << dotaPaths.size() << "): ";
     int choice = 0;
     if (!(std::cin >> choice)) {
         std::cin.clear();
         std::cin.ignore(10000, '\n');
-        std::cout << OBF_CSTR("Неверный ввод, используем первую установку.") << std::endl;
+        std::cout << "Неверный ввод, используем первую установку." << std::endl;
         selectedDotaPath = dotaPaths[0];
         return;
     }
 
     if (choice >= 1 && choice <= static_cast<int>(dotaPaths.size())) {
         selectedDotaPath = dotaPaths[choice - 1];
-        std::cout << OBF_CSTR("Выбрана установка: ") << selectedDotaPath << std::endl;
+        std::cout << "Выбрана установка: " << selectedDotaPath << std::endl;
     }
     else {
-        std::cout << OBF_CSTR("Неверный выбор, используем первую установку.") << std::endl;
+        std::cout << "Неверный выбор, используем первую установку." << std::endl;
         selectedDotaPath = dotaPaths[0];
     }
 
@@ -338,12 +288,7 @@ void SteamManager::selectDotaPathInteractive() {
 }
 
 void SteamManager::findSteamDirectory() {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
-    std::cout << OBF_CSTR("Поиск библиотек Steam...") << std::endl;
+    std::cout << "Поиск библиотек Steam..." << std::endl;
 
     steamPaths.clear();
 
@@ -352,13 +297,13 @@ void SteamManager::findSteamDirectory() {
     findInCommonLocations();
 
     if (steamPaths.empty()) {
-        std::cout << OBF_CSTR("Библиотеки Steam не найдены!") << std::endl;
+        std::cout << "Библиотеки Steam не найдены!" << std::endl;
         return;
     }
 
-    std::cout << OBF_CSTR("Найдено библиотек Steam: ") << steamPaths.size() << std::endl;
+    std::cout << "Найдено библиотек Steam: " << steamPaths.size() << std::endl;
     for (const auto& path : steamPaths) {
-        std::cout << OBF_CSTR("  - ") << path << std::endl;
+        std::cout << "  - " << path << std::endl;
     }
 
     // Ищем все пути к Dota 2
@@ -370,16 +315,16 @@ void SteamManager::findSteamDirectory() {
     if (!selectedDotaPath.empty()) {
         // Устанавливаем производные пути
         this->dotaPath = selectedDotaPath;
-        this->vpkPath = this->dotaPath + OBF_CSTR("\\game\\dota\\pak01_dir.vpk");
-        this->modPath = this->dotaPath + OBF_CSTR("\\game\\mods\\pak02_dir.vpk");
-        this->addonsContentPath = this->dotaPath + OBF_CSTR("\\content\\dota_addons");
-        this->addonsGamePath = this->dotaPath + OBF_CSTR("\\game\\dota_addons");
-        this->resourceCompiler = this->dotaPath + OBF_CSTR("\\game\\bin\\win64\\resourcecompiler.exe");
+        this->vpkPath = this->dotaPath + "\\game\\dota\\pak01_dir.vpk";
+        this->modPath = this->dotaPath + "\\game\\mods\\pak02_dir.vpk";
+        this->addonsContentPath = this->dotaPath + "\\content\\dota_addons";
+        this->addonsGamePath = this->dotaPath + "\\game\\dota_addons";
+        this->resourceCompiler = this->dotaPath + "\\game\\bin\\win64\\resourcecompiler.exe";
 
-        std::cout << OBF_CSTR("Путь к Dota 2 установлен: ") << dotaPath << std::endl;
+        std::cout << "Путь к Dota 2 установлен: " << dotaPath << std::endl;
     }
     else {
-        std::cout << OBF_CSTR("Не удалось найти действительный путь к Dota 2!") << std::endl;
+        std::cout << "Не удалось найти действительный путь к Dota 2!" << std::endl;
     }
 }
 
@@ -400,20 +345,10 @@ fs::path GetExecutableDirectory() {
 }
 
 fs::path SteamManager::GetSavedPathFile() {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
-    return GetExecutableDirectory() / OBF_CSTR("configs") / OBF_CSTR("steam_path.json");
+    return GetExecutableDirectory() / "configs" / "steam_path.json";
 }
 
 bool SteamManager::LoadSavedPath() {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     try {
         fs::path pathFile = GetSavedPathFile();
         if (!fs::exists(pathFile)) {
@@ -428,11 +363,11 @@ bool SteamManager::LoadSavedPath() {
         json j;
         file >> j;
 
-        if (!j.contains(OBF_CSTR("dota_path")) || !j[OBF_CSTR("dota_path")].is_string()) {
+        if (!j.contains("dota_path") || !j["dota_path"].is_string()) {
             return false;
         }
 
-        std::string savedPath = j[OBF_CSTR("dota_path")].get<std::string>();
+        std::string savedPath = j["dota_path"].get<std::string>();
         std::replace(savedPath.begin(), savedPath.end(), '/', '\\');
         return SetDotaPath(savedPath);
     }
@@ -442,11 +377,6 @@ bool SteamManager::LoadSavedPath() {
 }
 
 void SteamManager::SavePath() const {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     try {
         if (selectedDotaPath.empty()) {
             return;
@@ -454,7 +384,7 @@ void SteamManager::SavePath() const {
         fs::path pathFile = GetSavedPathFile();
         fs::create_directories(pathFile.parent_path());
         json j;
-        j[OBF_CSTR("dota_path")] = selectedDotaPath;
+        j["dota_path"] = selectedDotaPath;
         std::ofstream file(pathFile);
         if (file.is_open()) {
             file << j.dump(2);
@@ -466,11 +396,6 @@ void SteamManager::SavePath() const {
 }
 
 void SteamManager::ClearPaths() {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     selectedDotaPath.clear();
     selectedSteamPath.clear();
     dotaPath.clear();
@@ -482,11 +407,6 @@ void SteamManager::ClearPaths() {
 }
 
 std::vector<std::string> SteamManager::FindDotaPathsSilent() {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     steamPaths.clear();
     dotaPaths.clear();
 
@@ -498,22 +418,17 @@ std::vector<std::string> SteamManager::FindDotaPathsSilent() {
 }
 
 bool SteamManager::SetDotaPath(const std::string& path) {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (!validateDotaPath(path)) {
         return false;
     }
 
     selectedDotaPath = path;
     dotaPath = path;
-    vpkPath = dotaPath + OBF_CSTR("\\game\\dota\\pak01_dir.vpk");
-    modPath = dotaPath + OBF_CSTR("\\game\\mods\\pak02_dir.vpk");
-    addonsContentPath = dotaPath + OBF_CSTR("\\content\\dota_addons");
-    addonsGamePath = dotaPath + OBF_CSTR("\\game\\dota_addons");
-    resourceCompiler = dotaPath + OBF_CSTR("\\game\\bin\\win64\\resourcecompiler.exe");
+    vpkPath = dotaPath + "\\game\\dota\\pak01_dir.vpk";
+    modPath = dotaPath + "\\game\\mods\\pak02_dir.vpk";
+    addonsContentPath = dotaPath + "\\content\\dota_addons";
+    addonsGamePath = dotaPath + "\\game\\dota_addons";
+    resourceCompiler = dotaPath + "\\game\\bin\\win64\\resourcecompiler.exe";
 
     // Try to derive the Steam library path that owns this Dota installation.
     fs::path p(path);
@@ -526,74 +441,34 @@ bool SteamManager::SetDotaPath(const std::string& path) {
 }
 
 bool SteamManager::HasValidPath() const {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     return !dotaPath.empty() && validateDotaPath(dotaPath);
 }
 
 // Новые методы для доступа к данным
 std::string SteamManager::getSteamPath() const {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     return selectedSteamPath;
 }
 
 std::string SteamManager::getDotaPath() const {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     return dotaPath;
 }
 
 std::string SteamManager::getVpkPath() const {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     return vpkPath;
 }
 
 std::string SteamManager::getModPath() const {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     return modPath;
 }
 
 std::string SteamManager::getAddonsContentPath() const {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     return addonsContentPath;
 }
 
 std::string SteamManager::getAddonsGamePath() const {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     return addonsGamePath;
 }
 
 std::string SteamManager::getResourceCompiler() const {
-    SH_AD_SteamManager();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     return resourceCompiler;
 }

@@ -13,16 +13,6 @@
 #include <cstdlib>
 #include <cwchar>
 #include <tlhelp32.h>
-#include "SecurityHardening.h"
-namespace {
-__declspec(noinline) void SH_AD_VRF() noexcept {
-    if (SH_PebBeingDebugged()) g_integritySeed ^= 0xAABBCCDD;
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
-}
-}
 
 namespace {
 std::string GetExecutableDirectory() {
@@ -30,7 +20,7 @@ std::string GetExecutableDirectory() {
     DWORD len = GetModuleFileNameA(nullptr, buffer, MAX_PATH);
     if (len == 0 || len == MAX_PATH) {
         try { return fs::current_path().string(); }
-        catch (const std::exception&) { return OBF_CSTR("."); }
+        catch (const std::exception&) { return "."; }
     }
     return fs::path(buffer).parent_path().string();
 }
@@ -42,7 +32,7 @@ fs::path GetProjectDirectory() {
     while (!check.empty() && check != root) {
         std::error_code ec;
         for (const auto& entry : fs::directory_iterator(check, ec)) {
-            if (entry.is_regular_file(ec) && entry.path().extension() == OBF_CSTR(".vcxproj")) {
+            if (entry.is_regular_file(ec) && entry.path().extension() == ".vcxproj") {
                 return check;
             }
         }
@@ -56,13 +46,13 @@ fs::path GetProjectDirectory() {
 fs::path GetDecompilerDir() {
     fs::path exeDir = GetExecutableDirectory();
     fs::path projectDir = GetProjectDirectory();
-    fs::path exeDecompiler = exeDir / OBF_CSTR("decompiler");
-    fs::path projectDecompiler = projectDir / OBF_CSTR("decompiler");
+    fs::path exeDecompiler = exeDir / "decompiler";
+    fs::path projectDecompiler = projectDir / "decompiler";
 
-    if (fs::exists(exeDecompiler / OBF_CSTR("Source2Viewer-CLI.exe"))) {
+    if (fs::exists(exeDecompiler / "Source2Viewer-CLI.exe")) {
         return exeDecompiler;
     }
-    if (fs::exists(projectDecompiler / OBF_CSTR("Source2Viewer-CLI.exe"))) {
+    if (fs::exists(projectDecompiler / "Source2Viewer-CLI.exe")) {
         return projectDecompiler;
     }
     // Default to project directory in dev layout, otherwise executable directory.
@@ -104,7 +94,7 @@ std::vector<DWORD> FindDecompilerPIDs() {
     pe.dwSize = sizeof(pe);
     if (Process32First(hSnap, &pe)) {
         do {
-            if (_wcsicmp(pe.szExeFile, OBFW_CSTR(L"Source2Viewer-CLI.exe")) == 0) {
+            if (_wcsicmp(pe.szExeFile, L"Source2Viewer-CLI.exe") == 0) {
                 pids.push_back(pe.th32ProcessID);
             }
         } while (Process32Next(hSnap, &pe));
@@ -125,32 +115,17 @@ struct DecompilerCleanupRegistrar {
 
 VRF& VRF::GetInstance()
 {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     static VRF instance;
     return instance;
 }
 
 static size_t write_data(void* ptr, size_t size, size_t nmemb, FILE* stream) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     size_t written = fwrite(ptr, size, nmemb, stream);
     //std::cout << "Записано " << written << " байт" << std::endl;
     return written;
 }
 
 static int debug_callback(CURL* handle, curl_infotype type, char* data, size_t size, void* userptr) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (type == CURLINFO_TEXT) {
         //std::cout << "cURL: " << std::string(data, size);
     }
@@ -158,11 +133,6 @@ static int debug_callback(CURL* handle, curl_infotype type, char* data, size_t s
 }
 
 bool download_file(const std::string& url, const std::string& output_filename) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     CURL* curl;
     CURLcode res;
     FILE* fp;
@@ -173,13 +143,13 @@ bool download_file(const std::string& url, const std::string& output_filename) {
 
     curl = curl_easy_init();
     if (!curl) {
-        std::cerr << OBF_CSTR("Ошибка инициализации cURL") << std::endl;
+        std::cerr << "Ошибка инициализации cURL" << std::endl;
         return false;
     }
 
-    fp = fopen(output_filename.c_str(), OBF_CSTR("wb"));
+    fp = fopen(output_filename.c_str(), "wb");
     if (!fp) {
-        std::cerr << OBF_CSTR("Не могу открыть файл для записи: ") << output_filename << std::endl;
+        std::cerr << "Не могу открыть файл для записи: " << output_filename << std::endl;
         curl_easy_cleanup(curl);
         return false;
     }
@@ -190,7 +160,7 @@ bool download_file(const std::string& url, const std::string& output_filename) {
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_MAXREDIRS, 10L);
 
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, OBF_CSTR("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"));
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36");
     // TLS verification is enabled by default; do not disable it.
     // If corporate proxy requires custom CA, use CURLOPT_CAINFO.
 
@@ -207,7 +177,7 @@ bool download_file(const std::string& url, const std::string& output_filename) {
     fclose(fp);
 
     if (res != CURLE_OK) {
-        std::cerr << OBF_CSTR("cURL ошибка: ") << curl_easy_strerror(res) << std::endl;
+        std::cerr << "cURL ошибка: " << curl_easy_strerror(res) << std::endl;
         if (fs::exists(output_filename) && fs::file_size(output_filename) == 0) {
             fs::remove(output_filename);
         }
@@ -217,64 +187,54 @@ bool download_file(const std::string& url, const std::string& output_filename) {
 
     long response_code;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-    std::cout << OBF_CSTR("HTTP код ответа: ") << response_code << std::endl;
+    std::cout << "HTTP код ответа: " << response_code << std::endl;
 
     double downloaded_size;
     curl_easy_getinfo(curl, CURLINFO_SIZE_DOWNLOAD, &downloaded_size);
-    std::cout << OBF_CSTR("Размер скачанных данных: ") << downloaded_size << OBF_CSTR(" байт") << std::endl;
+    std::cout << "Размер скачанных данных: " << downloaded_size << " байт" << std::endl;
 
     curl_easy_cleanup(curl);
 
     if (!fs::exists(output_filename)) {
-        std::cerr << OBF_CSTR("Файл не был создан") << std::endl;
+        std::cerr << "Файл не был создан" << std::endl;
         return false;
     }
 
     auto file_size = fs::file_size(output_filename);
-    std::cout << OBF_CSTR("Размер файла на диске: ") << file_size << OBF_CSTR(" байт") << std::endl;
+    std::cout << "Размер файла на диске: " << file_size << " байт" << std::endl;
 
     if (file_size == 0) {
-        std::cerr << OBF_CSTR("Файл скачан с нулевым размером") << std::endl;
+        std::cerr << "Файл скачан с нулевым размером" << std::endl;
         fs::remove(output_filename);
         return false;
     }
 
     if (response_code != 200) {
-        std::cerr << OBF_CSTR("Сервер вернул ошибку: ") << response_code << std::endl;
+        std::cerr << "Сервер вернул ошибку: " << response_code << std::endl;
         if (fs::exists(output_filename)) {
             fs::remove(output_filename);
         }
         return false;
     }
 
-    std::cout << OBF_CSTR("Файл успешно скачан: ") << output_filename << OBF_CSTR(" (") << file_size << OBF_CSTR(" байт)") << std::endl;
+    std::cout << "Файл успешно скачан: " << output_filename << " (" << file_size << " байт)" << std::endl;
     return true;
 }
 
 
 static bool IsPathSafeForCommand(const std::string& path) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
-    const std::string forbidden = OBF_CSTR("\"&|;<>()$%");
+    const std::string forbidden = "\"&|;<>()$%";
     return path.find_first_of(forbidden) == std::string::npos;
 }
 
 bool extract_zip(const std::string& zip_filename, const std::string& output_folder) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::error_code ec;
     std::filesystem::create_directories(output_folder, ec);
 
     int err = 0;
     zip* z = zip_open(zip_filename.c_str(), 0, &err);
     if (!z) {
-        std::cerr << OBF_CSTR("Ошибка открытия архива: ") << err << std::endl;
+        std::cerr << "Ошибка открытия архива: " << err << std::endl;
         return false;
     }
 
@@ -289,9 +249,9 @@ bool extract_zip(const std::string& zip_filename, const std::string& output_fold
         // ZIP Slip protection
         if (!st.name || st.name[0] == '\0') continue;
         std::string entry_name = st.name;
-        if (entry_name.find(OBF_CSTR("..")) != std::string::npos ||
+        if (entry_name.find("..") != std::string::npos ||
             entry_name.front() == '/' || entry_name.front() == '\\') {
-            std::cerr << OBF_CSTR("Skipping unsafe zip entry: ") << entry_name << std::endl;
+            std::cerr << "Skipping unsafe zip entry: " << entry_name << std::endl;
             continue;
         }
 
@@ -299,12 +259,12 @@ bool extract_zip(const std::string& zip_filename, const std::string& output_fold
         fs::path canonical_out = fs::weakly_canonical(out_path);
         fs::path canonical_base = fs::weakly_canonical(output_folder);
         if (canonical_out.string().find(canonical_base.string()) != 0) {
-            std::cerr << OBF_CSTR("Blocked zip slip attempt: ") << entry_name << std::endl;
+            std::cerr << "Blocked zip slip attempt: " << entry_name << std::endl;
             continue;
         }
 
         if (st.size > kMaxEntrySize) {
-            std::cerr << OBF_CSTR("Skipping oversized zip entry: ") << entry_name << std::endl;
+            std::cerr << "Skipping oversized zip entry: " << entry_name << std::endl;
             continue;
         }
 
@@ -317,7 +277,7 @@ bool extract_zip(const std::string& zip_filename, const std::string& output_fold
 
         zip_file* f = zip_fopen_index(z, i, 0);
         if (!f) {
-            std::cerr << OBF_CSTR("Ошибка открытия файла в архиве: ") << st.name << std::endl;
+            std::cerr << "Ошибка открытия файла в архиве: " << st.name << std::endl;
             continue;
         }
 
@@ -327,7 +287,7 @@ bool extract_zip(const std::string& zip_filename, const std::string& output_fold
             buf.resize(static_cast<size_t>(st.size));
             zip_int64_t read = zip_fread(f, buf.data(), static_cast<zip_uint64_t>(st.size));
             if (read < 0 || read != st.size) {
-                std::cerr << OBF_CSTR("Failed to read zip entry: ") << st.name << std::endl;
+                std::cerr << "Failed to read zip entry: " << st.name << std::endl;
                 read_ok = false;
             }
         }
@@ -337,7 +297,7 @@ bool extract_zip(const std::string& zip_filename, const std::string& output_fold
             continue;
         }
 
-        FILE* out = fopen(file_path.c_str(), OBF_CSTR("wb"));
+        FILE* out = fopen(file_path.c_str(), "wb");
         if (out) {
             if (st.size > 0) {
                 fwrite(buf.data(), 1, static_cast<size_t>(st.size), out);
@@ -346,7 +306,7 @@ bool extract_zip(const std::string& zip_filename, const std::string& output_fold
             any_extracted = true;
         }
         else {
-            std::cerr << OBF_CSTR("Ошибка записи файла: ") << file_path << std::endl;
+            std::cerr << "Ошибка записи файла: " << file_path << std::endl;
         }
     }
 
@@ -355,19 +315,14 @@ bool extract_zip(const std::string& zip_filename, const std::string& output_fold
 }
 
 std::string find_executable(const std::string& directory) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     try {
         for (const auto& entry : fs::recursive_directory_iterator(directory)) {
             if (entry.is_regular_file()) {
                 std::string extension = entry.path().extension().string();
-                if (extension == OBF_CSTR(".exe") || extension == OBF_CSTR(".bat") || extension == OBF_CSTR(".cmd")) {
+                if (extension == ".exe" || extension == ".bat" || extension == ".cmd") {
                     std::string filename = entry.path().filename().string();
-                    if (filename.find(OBF_CSTR("Source2Viewer")) != std::string::npos ||
-                        filename.find(OBF_CSTR("CLI")) != std::string::npos) {
+                    if (filename.find("Source2Viewer") != std::string::npos ||
+                        filename.find("CLI") != std::string::npos) {
                         return entry.path().string();
                     }
                 }
@@ -375,16 +330,16 @@ std::string find_executable(const std::string& directory) {
         }
 
         for (const auto& entry : fs::recursive_directory_iterator(directory)) {
-            if (entry.is_regular_file() && entry.path().extension() == OBF_CSTR(".exe")) {
+            if (entry.is_regular_file() && entry.path().extension() == ".exe") {
                 return entry.path().string();
             }
         }
     }
     catch (const std::exception& e) {
-        std::cerr << OBF_CSTR("Ошибка при поиске исполняемого файла: ") << e.what() << std::endl;
+        std::cerr << "Ошибка при поиске исполняемого файла: " << e.what() << std::endl;
     }
 
-    return OBF_CSTR("");
+    return "";
 }
 
 bool run_program_createprocess_capture(const std::string& program_path, const std::string& arguments, std::string& output);
@@ -395,27 +350,22 @@ bool process_file_with_tool(const std::string& extract_dir,
     const std::string& output_file, const std::string& add_args, std::string& output);
 bool process_file_with_tool2(const std::string& extract_dir, const std::string& args, std::string& output);
 
-bool run_program_sync(const std::string& program_path, const std::string& arguments, const std::string& working_dir = OBF_CSTR("")) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
+bool run_program_sync(const std::string& program_path, const std::string& arguments, const std::string& working_dir = "") {
     if (!IsPathSafeForCommand(program_path)) {
-        std::cerr << OBF_CSTR("Unsafe characters in program path, aborting.") << std::endl;
+        std::cerr << "Unsafe characters in program path, aborting." << std::endl;
         return false;
     }
     if (!fs::exists(program_path)) {
-        std::cerr << OBF_CSTR("Исполняемый файл не найден: ") << program_path << std::endl;
+        std::cerr << "Исполняемый файл не найден: " << program_path << std::endl;
         return false;
     }
 
     std::string command;
     if (working_dir.empty()) {
-        command = OBF_CSTR("\"") + program_path + OBF_CSTR("\" ") + arguments;
+        command = "\"" + program_path + "\" " + arguments;
     }
     else {
-        command = OBF_CSTR("cd /D \"") + working_dir + OBF_CSTR("\" && \"") + program_path + OBF_CSTR("\" ") + arguments;
+        command = "cd /D \"" + working_dir + "\" && \"" + program_path + "\" " + arguments;
     }
 
     //std::cout << "Выполняем команду: " << command << std::endl;
@@ -433,21 +383,16 @@ bool run_program_sync(const std::string& program_path, const std::string& argume
 }
 
 bool run_program_createprocess(const std::string& program_path, const std::string& arguments) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (!IsPathSafeForCommand(program_path)) {
-        std::cerr << OBF_CSTR("Unsafe characters in program path, aborting.") << std::endl;
+        std::cerr << "Unsafe characters in program path, aborting." << std::endl;
         return false;
     }
     if (!fs::exists(program_path)) {
-        std::cerr << OBF_CSTR("Исполняемый файл не найден: ") << program_path << std::endl;
+        std::cerr << "Исполняемый файл не найден: " << program_path << std::endl;
         return false;
     }
 
-    std::string full_command = OBF_CSTR("\"") + program_path + OBF_CSTR("\" ") + arguments;
+    std::string full_command = "\"" + program_path + "\" " + arguments;
 
     STARTUPINFOA si;
     PROCESS_INFORMATION pi;
@@ -464,7 +409,7 @@ bool run_program_createprocess(const std::string& program_path, const std::strin
     char* working_dir_buf = new char[working_dir.length() + 1];
     strcpy(working_dir_buf, working_dir.c_str());
 
-    BOOL success = SH_CreateProcessA(
+    BOOL success = CreateProcessA(
         NULL,           // Имя модуля
         cmd,            // Командная строка
         NULL,           // Дескриптор процесса
@@ -482,44 +427,34 @@ bool run_program_createprocess(const std::string& program_path, const std::strin
     delete[] working_dir_buf;
 
     if (!success) {
-        std::cerr << OBF_CSTR("Ошибка создания процесса: ") << GetLastError() << std::endl;
+        std::cerr << "Ошибка создания процесса: " << GetLastError() << std::endl;
         return false;
     }
 
     RegisterActiveProcess(pi.dwProcessId);
-    SH_WaitForSingleObject(pi.hProcess, INFINITE);
+    WaitForSingleObject(pi.hProcess, INFINITE);
     UnregisterActiveProcess(pi.dwProcessId);
 
     DWORD exit_code;
-    SH_GetExitCodeProcess(pi.hProcess, &exit_code);
+    GetExitCodeProcess(pi.hProcess, &exit_code);
 
-    SH_CloseHandle(pi.hProcess);
-    SH_CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
 
     return (exit_code == 0);
 }
 
 std::string make_absolute_path(const std::string& path) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     try {
         return fs::absolute(path).string();
     }
     catch (const std::exception& e) {
-        std::cerr << OBF_CSTR("Ошибка создания абсолютного пути: ") << e.what() << std::endl;
+        std::cerr << "Ошибка создания абсолютного пути: " << e.what() << std::endl;
         return path;
     }
 }
 
 std::string generate_unique_suffix() {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::random_device rd;
     std::mt19937 gen(rd());
     std::uniform_int_distribution<> dis(100000, 999999);
@@ -528,7 +463,7 @@ std::string generate_unique_suffix() {
 
 bool process_file_with_tool(const std::string& extract_dir,
     const std::string& input_file,
-    const std::string& output_file = OBF_CSTR(""), const std::string& add_args = OBF_CSTR("")) {
+    const std::string& output_file = "", const std::string& add_args = "") {
     std::string unused;
     return process_file_with_tool(extract_dir, input_file, output_file, add_args, unused);
 }
@@ -536,29 +471,24 @@ bool process_file_with_tool(const std::string& extract_dir,
 bool process_file_with_tool(const std::string& extract_dir,
     const std::string& input_file,
     const std::string& output_file, const std::string& add_args, std::string& output) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     output.clear();
     std::string executable = find_executable(extract_dir);
 
     if (executable.empty()) {
-        std::string details = OBF_CSTR("Source2Viewer-CLI executable not found in: ") + extract_dir;
+        std::string details = "Source2Viewer-CLI executable not found in: " + extract_dir;
         try {
-            details += OBF_CSTR("\nDirectory contents:\n");
+            details += "\nDirectory contents:\n";
             for (const auto& entry : fs::recursive_directory_iterator(extract_dir)) {
                 if (entry.is_regular_file()) {
-                    details += OBF_CSTR("  ") + entry.path().string() + OBF_CSTR("\n");
+                    details += "  " + entry.path().string() + "\n";
                 }
             }
         }
         catch (const std::exception& e) {
-            details += OBF_CSTR("\nFailed to list directory: ") + std::string(e.what());
+            details += "\nFailed to list directory: " + std::string(e.what());
         }
         output = details;
-        ERROR_LOG(OBF_CSTR("process_file_with_tool"), details);
+        ERROR_LOG("process_file_with_tool", details);
         return false;
     }
 
@@ -568,13 +498,13 @@ bool process_file_with_tool(const std::string& extract_dir,
     std::string abs_input_file = make_absolute_path(input_file);
 
     if (!IsPathSafeForCommand(abs_executable) || !IsPathSafeForCommand(abs_input_file)) {
-        output = OBF_CSTR("Unsafe characters in paths, aborting.");
+        output = "Unsafe characters in paths, aborting.";
         std::cerr << output << std::endl;
         return false;
     }
 
     if (!fs::exists(abs_input_file)) {
-        output = OBF_CSTR("Input file not found: ") + abs_input_file + OBF_CSTR("\nCurrent directory: ") + fs::current_path().string();
+        output = "Input file not found: " + abs_input_file + "\nCurrent directory: " + fs::current_path().string();
         std::cerr << output << std::endl;
         return false;
     }
@@ -583,14 +513,14 @@ bool process_file_with_tool(const std::string& extract_dir,
     if (output_file.empty()) {
         fs::path input_path(abs_input_file);
         fs::path output_path = input_path;
-        output_path.replace_extension(OBF_CSTR(".decoded"));
+        output_path.replace_extension(".decoded");
         abs_output_file = output_path.string();
     }
     else {
         abs_output_file = make_absolute_path(output_file);
     }
 
-    std::string arguments = OBF_CSTR("-i \"") + abs_input_file + OBF_CSTR("\" -o \"") + abs_output_file + OBF_CSTR("\"") + OBF_CSTR(" ") + add_args;
+    std::string arguments = "-i \"" + abs_input_file + "\" -o \"" + abs_output_file + "\"" + " " + add_args;
 
     if (run_program_createprocess_capture(abs_executable, arguments, output)) {
         return true;
@@ -606,28 +536,23 @@ bool process_file_with_tool2(const std::string& extract_dir, const std::string& 
 }
 
 bool process_file_with_tool2(const std::string& extract_dir, const std::string& args, std::string& output) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::string executable = find_executable(extract_dir);
 
     if (executable.empty()) {
-        std::string details = OBF_CSTR("Source2Viewer-CLI executable not found in: ") + extract_dir;
+        std::string details = "Source2Viewer-CLI executable not found in: " + extract_dir;
         try {
-            details += OBF_CSTR("\nDirectory contents:\n");
+            details += "\nDirectory contents:\n";
             for (const auto& entry : fs::recursive_directory_iterator(extract_dir)) {
                 if (entry.is_regular_file()) {
-                    details += OBF_CSTR("  ") + entry.path().string() + OBF_CSTR("\n");
+                    details += "  " + entry.path().string() + "\n";
                 }
             }
         }
         catch (const std::exception& e) {
-            details += OBF_CSTR("\nFailed to list directory: ") + std::string(e.what());
+            details += "\nFailed to list directory: " + std::string(e.what());
         }
         output = details;
-        ERROR_LOG(OBF_CSTR("process_file_with_tool"), details);
+        ERROR_LOG("process_file_with_tool", details);
         return false;
     }
 
@@ -636,7 +561,7 @@ bool process_file_with_tool2(const std::string& extract_dir, const std::string& 
     std::string abs_executable = make_absolute_path(executable);
 
     if (!IsPathSafeForCommand(abs_executable)) {
-        output = OBF_CSTR("Unsafe characters in executable path, aborting.");
+        output = "Unsafe characters in executable path, aborting.";
         std::cerr << output << std::endl;
         return false;
     }
@@ -653,27 +578,22 @@ bool process_file_with_tool2(const std::string& extract_dir, const std::string& 
 
 bool run_program_sync_capture(const std::string& program_path, const std::string& arguments,
     const std::string& working_dir, std::string& output) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (!fs::exists(program_path)) {
-        std::cerr << OBF_CSTR("Исполняемый файл не найден: ") << program_path << std::endl;
+        std::cerr << "Исполняемый файл не найден: " << program_path << std::endl;
         return false;
     }
 
-    std::string temp_output_file = OBF_CSTR("temp_output_") + generate_unique_suffix() + OBF_CSTR(".txt");
+    std::string temp_output_file = "temp_output_" + generate_unique_suffix() + ".txt";
     std::string command;
 
     if (working_dir.empty()) {
-        command = OBF_CSTR("\"") + program_path + OBF_CSTR("\" ") + arguments + OBF_CSTR(" > \"") + temp_output_file + OBF_CSTR("\" 2>&1");
+        command = "\"" + program_path + "\" " + arguments + " > \"" + temp_output_file + "\" 2>&1";
     }
     else {
-        command = OBF_CSTR("cd /D \"") + working_dir + OBF_CSTR("\" && \"") + program_path + OBF_CSTR("\" ") + arguments + OBF_CSTR(" > \"") + temp_output_file + OBF_CSTR("\" 2>&1");
+        command = "cd /D \"" + working_dir + "\" && \"" + program_path + "\" " + arguments + " > \"" + temp_output_file + "\" 2>&1";
     }
 
-    std::cout << OBF_CSTR("Выполняем команду с захватом вывода: ") << command << std::endl;
+    std::cout << "Выполняем команду с захватом вывода: " << command << std::endl;
 
     int result = std::system(command.c_str());
 
@@ -690,29 +610,24 @@ bool run_program_sync_capture(const std::string& program_path, const std::string
     }
 
     if (result == 0) {
-        std::cout << OBF_CSTR("Программа завершилась успешно, вывод захвачен (") << output.size() << OBF_CSTR(" байт)") << std::endl;
+        std::cout << "Программа завершилась успешно, вывод захвачен (" << output.size() << " байт)" << std::endl;
         return true;
     }
     else {
-        std::cerr << OBF_CSTR("Программа завершилась с ошибкой. Код: ") << result << std::endl;
-        std::cerr << OBF_CSTR("Вывод программы: ") << output << std::endl;
+        std::cerr << "Программа завершилась с ошибкой. Код: " << result << std::endl;
+        std::cerr << "Вывод программы: " << output << std::endl;
         return false;
     }
 }
 
 bool run_program_createprocess_capture(const std::string& program_path, const std::string& arguments,
     std::string& output) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (!fs::exists(program_path)) {
-        std::cerr << OBF_CSTR("Исполняемый файл не найден: ") << program_path << std::endl;
+        std::cerr << "Исполняемый файл не найден: " << program_path << std::endl;
         return false;
     }
 
-    std::string full_command = OBF_CSTR("\"") + program_path + OBF_CSTR("\" ") + arguments;
+    std::string full_command = "\"" + program_path + "\" " + arguments;
 
     SECURITY_ATTRIBUTES sa;
     HANDLE hRead, hWrite;
@@ -721,8 +636,8 @@ bool run_program_createprocess_capture(const std::string& program_path, const st
     sa.bInheritHandle = TRUE;
     sa.lpSecurityDescriptor = NULL;
 
-    if (!SH_CreatePipe(&hRead, &hWrite, &sa, 0)) {
-        std::cerr << OBF_CSTR("Ошибка создания pipe: ") << GetLastError() << std::endl;
+    if (!CreatePipe(&hRead, &hWrite, &sa, 0)) {
+        std::cerr << "Ошибка создания pipe: " << GetLastError() << std::endl;
         return false;
     }
     // The child must inherit only hWrite (its stdout/stderr), never hRead.
@@ -747,7 +662,7 @@ bool run_program_createprocess_capture(const std::string& program_path, const st
     char* working_dir_buf = new char[working_dir.length() + 1];
     strcpy(working_dir_buf, working_dir.c_str());
 
-    BOOL success = SH_CreateProcessA(
+    BOOL success = CreateProcessA(
         NULL,           // Имя модуля
         cmd,            // Командная строка
         NULL,           // Дескриптор процесса
@@ -764,13 +679,13 @@ bool run_program_createprocess_capture(const std::string& program_path, const st
     delete[] working_dir_buf;
 
     if (!success) {
-        std::cerr << OBF_CSTR("Ошибка создания процесса: ") << GetLastError() << std::endl;
-        SH_CloseHandle(hRead);
-        SH_CloseHandle(hWrite);
+        std::cerr << "Ошибка создания процесса: " << GetLastError() << std::endl;
+        CloseHandle(hRead);
+        CloseHandle(hWrite);
         return false;
     }
 
-    SH_CloseHandle(hWrite);
+    CloseHandle(hWrite);
 
     CHAR buffer[4096];
     std::stringstream outputStream;
@@ -793,20 +708,20 @@ bool run_program_createprocess_capture(const std::string& program_path, const st
         while (PeekNamedPipe(hRead, NULL, 0, NULL, &avail, NULL) && avail > 0) {
             DWORD toRead = (avail > sizeof(buffer) - 1) ? (sizeof(buffer) - 1) : avail;
             DWORD bytesRead = 0;
-            if (!SH_ReadFile(hRead, buffer, toRead, &bytesRead, NULL) || bytesRead == 0) { avail = 0; break; }
+            if (!ReadFile(hRead, buffer, toRead, &bytesRead, NULL) || bytesRead == 0) { avail = 0; break; }
             buffer[bytesRead] = '\0';
             outputStream << buffer;
             gotAnyData = true;
             tLastData = GetTickCount64();
         }
 
-        if (SH_WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0) { processExited = true; break; }
+        if (WaitForSingleObject(pi.hProcess, 0) == WAIT_OBJECT_0) { processExited = true; break; }
 
         ULONGLONG now = GetTickCount64();
         ULONGLONG idle = now - tLastData;
         if ((gotAnyData && idle > kIdleKillMs) || idle > kIdleKillNoDataMs) { break; }
         if (now - tStart > kHardCapMs) { break; }
-        SH_Sleep(50);
+        Sleep(50);
     }
 
     // Drain anything left in the pipe after the process exited/was terminated.
@@ -814,7 +729,7 @@ bool run_program_createprocess_capture(const std::string& program_path, const st
     while (PeekNamedPipe(hRead, NULL, 0, NULL, &availTail, NULL) && availTail > 0) {
         DWORD toRead = (availTail > sizeof(buffer) - 1) ? (sizeof(buffer) - 1) : availTail;
         DWORD bytesRead = 0;
-        if (!SH_ReadFile(hRead, buffer, toRead, &bytesRead, NULL) || bytesRead == 0) break;
+        if (!ReadFile(hRead, buffer, toRead, &bytesRead, NULL) || bytesRead == 0) break;
         buffer[bytesRead] = '\0';
         outputStream << buffer;
     }
@@ -823,40 +738,35 @@ bool run_program_createprocess_capture(const std::string& program_path, const st
 
     DWORD exit_code = 0;
     if (processExited) {
-        SH_GetExitCodeProcess(pi.hProcess, &exit_code);
+        GetExitCodeProcess(pi.hProcess, &exit_code);
     } else {
         // Finished working but did not exit on its own -> terminate the lingerer.
         TerminateProcess(pi.hProcess, 0);
-        SH_WaitForSingleObject(pi.hProcess, 3000);
+        WaitForSingleObject(pi.hProcess, 3000);
         exit_code = 0;
     }
 
-    SH_CloseHandle(pi.hProcess);
-    SH_CloseHandle(pi.hThread);
-    SH_CloseHandle(hRead);
+    CloseHandle(pi.hProcess);
+    CloseHandle(pi.hThread);
+    CloseHandle(hRead);
 
     if (exit_code == 0) {
-        std::cout << OBF_CSTR("Программа завершилась успешно, вывод захвачен (") << output.size() << OBF_CSTR(" байт)") << std::endl;
+        std::cout << "Программа завершилась успешно, вывод захвачен (" << output.size() << " байт)" << std::endl;
         return true;
     }
     else {
-        std::cerr << OBF_CSTR("Программа завершилась с ошибкой. Код: ") << exit_code << std::endl;
-        std::cerr << OBF_CSTR("Вывод программы: ") << output << std::endl;
+        std::cerr << "Программа завершилась с ошибкой. Код: " << exit_code << std::endl;
+        std::cerr << "Вывод программы: " << output << std::endl;
         return false;
     }
 }
 
 bool process_file_with_tool_block(const std::string& extract_dir, const std::string& input_file,
-    const std::string& block_name, std::string& output, const std::string& add_args = OBF_CSTR("")) {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
+    const std::string& block_name, std::string& output, const std::string& add_args = "") {
     std::string executable = find_executable(extract_dir);
 
     if (executable.empty()) {
-        std::cerr << OBF_CSTR("Не найден исполняемый файл в директории: ") << extract_dir << std::endl;
+        std::cerr << "Не найден исполняемый файл в директории: " << extract_dir << std::endl;
         return false;
     }
 
@@ -866,19 +776,19 @@ bool process_file_with_tool_block(const std::string& extract_dir, const std::str
     std::string abs_input_file = make_absolute_path(input_file);
 
     if (!fs::exists(abs_input_file)) {
-        std::cerr << OBF_CSTR("Входной файл не найден: ") << abs_input_file << std::endl;
+        std::cerr << "Входной файл не найден: " << abs_input_file << std::endl;
         return false;
     }
 
-    std::string arguments = OBF_CSTR("-i \"") + abs_input_file + OBF_CSTR("\"");
+    std::string arguments = "-i \"" + abs_input_file + "\"";
     if (block_name.empty()) {
-        arguments += OBF_CSTR(" -a");
+        arguments += " -a";
     }
     else {
-        arguments += OBF_CSTR(" -b ") + block_name;
+        arguments += " -b " + block_name;
     }
     if (!add_args.empty()) {
-        arguments += OBF_CSTR(" ") + add_args;
+        arguments += " " + add_args;
     }
 
     //std::cout << "Извлекаем блок '" << block_name << "' из файла: " << abs_input_file << std::endl;
@@ -896,17 +806,12 @@ bool process_file_with_tool_block(const std::string& extract_dir, const std::str
 
 bool VRF::IsSetupNeeded()
 {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     fs::path decompilerDir = GetDecompilerDir();
     static const std::vector<std::string> requiredFiles = {
-        OBF_CSTR("Source2Viewer-CLI.exe"),
-        OBF_CSTR("spirv-cross.dll"),
-        OBF_CSTR("libSkiaSharp.dll"),
-        OBF_CSTR("TinyEXRNative.dll")
+        "Source2Viewer-CLI.exe",
+        "spirv-cross.dll",
+        "libSkiaSharp.dll",
+        "TinyEXRNative.dll"
     };
     for (const auto& file : requiredFiles) {
         if (!fs::exists(decompilerDir / file)) return true;
@@ -916,17 +821,12 @@ bool VRF::IsSetupNeeded()
 
 bool VRF::Setup()
 {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     curl_global_init(CURL_GLOBAL_DEFAULT);
     std::string url = R"(https://github.com/ValveResourceFormat/ValveResourceFormat/releases/download/19.2/cli-windows-x64.zip)";
     fs::path decompilerDir = GetDecompilerDir();
     std::error_code ec;
     fs::create_directories(decompilerDir, ec);
-    std::string zip_filename = (decompilerDir / OBF_CSTR("cli-windows-x64.zip")).string();
+    std::string zip_filename = (decompilerDir / "cli-windows-x64.zip").string();
     std::string extract_to = decompilerDir.string();
 
     if (!download_file(url, zip_filename)) {
@@ -958,14 +858,9 @@ void VRF::Decompile(std::string input, std::string output, std::string args)
 
 bool VRF::DecompileWithOutput(std::string input, std::string output, std::string args, std::string& outLog)
 {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     bool ok = process_file_with_tool(GetDecompilerDir().string(), input, output, args, outLog);
     if (!ok) {
-        std::cerr << OBF_CSTR("Ошибка при обработке файла!") << std::endl;
+        std::cerr << "Ошибка при обработке файла!" << std::endl;
     }
     return ok;
 }
@@ -978,39 +873,28 @@ void VRF::Decompile(std::string args)
 
 bool VRF::DecompileWithOutput(std::string args, std::string& outLog)
 {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     bool ok = process_file_with_tool2(GetDecompilerDir().string(), args, outLog);
     if (!ok) {
-        std::cerr << OBF_CSTR("Ошибка при обработке файла!") << std::endl;
+        std::cerr << "Ошибка при обработке файла!" << std::endl;
     }
     return ok;
 }
 
 bool VRF::DecompileBlock(std::string input, std::string block_name, std::string& output, std::string args)
 {
-    SH_AD_VRF();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     bool ok = process_file_with_tool_block(GetDecompilerDir().string(), input, block_name, output, args);
     if (ok) {
         //std::cout << "Блок '" << block_name << "' успешно извлечен из файла: " << input << std::endl;
         //std::cout << "Размер извлеченных данных: " << output.size() << " байт" << std::endl;
     }
     else {
-        std::cerr << OBF_CSTR("Ошибка при извлечении блока '") << block_name << OBF_CSTR("' из файла: ") << input << std::endl;
+        std::cerr << "Ошибка при извлечении блока '" << block_name << "' из файла: " << input << std::endl;
         output.clear();
     }
     return ok;
 }
 
 void VRF::TerminateLingeringDecompilerProcesses() {
-    SH_AD_VRF();
     for (DWORD pid : FindDecompilerPIDs()) {
         if (IsActiveProcess(pid)) continue;
         KillProcessByPID(pid, 500);
@@ -1018,13 +902,11 @@ void VRF::TerminateLingeringDecompilerProcesses() {
 }
 
 void VRF::TerminateAllDecompilerProcesses() {
-    SH_AD_VRF();
     for (DWORD pid : FindDecompilerPIDs()) {
         KillProcessByPID(pid, 1000);
     }
 }
 
 std::string VRF::GenerateUniqueSuffix() {
-    SH_AD_VRF();
     return generate_unique_suffix();
 }

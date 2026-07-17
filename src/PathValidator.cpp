@@ -2,24 +2,9 @@
 #include "PathValidator.h"
 #include <algorithm>
 #include <cctype>
-#include "SecurityHardening.h"
-namespace {
-__declspec(noinline) void SH_AD_PathValidator() noexcept {
-    if (SH_DebugPort()) g_integritySeed ^= 0xDDEEFF00;
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
-}
-}
 
 
 bool PathValidator::IsPathSafe(const fs::path& path, const fs::path& baseDirectory) {
-    SH_AD_PathValidator();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     try {
         auto canonicalPath = GetCanonicalPath(path);
         auto canonicalBase = GetCanonicalPath(baseDirectory);
@@ -37,11 +22,6 @@ bool PathValidator::IsPathSafe(const fs::path& path, const fs::path& baseDirecto
 }
 
 fs::path PathValidator::NormalizePath(const fs::path& path) {
-    SH_AD_PathValidator();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     return path.lexically_normal();
 }
 
@@ -49,11 +29,6 @@ bool PathValidator::HasValidExtension(
     const fs::path& path,
     const std::vector<std::string>& allowedExtensions
 ) {
-    SH_AD_PathValidator();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::string ext = path.extension().string();
 
     // РџСЂРёРІРѕРґРёРј Рє РЅРёР¶РЅРµРјСѓ СЂРµРіРёСЃС‚СЂСѓ
@@ -77,11 +52,6 @@ std::optional<fs::path> PathValidator::ResolveSafePath(
     const fs::path& userPath,
     const fs::path& baseDirectory
 ) {
-    SH_AD_PathValidator();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     try {
         fs::path resolved;
 
@@ -104,11 +74,6 @@ std::optional<fs::path> PathValidator::ResolveSafePath(
 }
 
 bool PathValidator::IsSymlinkSafe(const fs::path& path) {
-    SH_AD_PathValidator();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     try {
         if (!fs::exists(path)) {
             return true; // Р¤Р°Р№Р» РЅРµ СЃСѓС‰РµСЃС‚РІСѓРµС‚, РЅРµ РїСЂРѕРІРµСЂСЏРµРј
@@ -130,31 +95,26 @@ bool PathValidator::IsSymlinkSafe(const fs::path& path) {
 }
 
 Result<fs::path, std::string> PathValidator::ValidateVPKPath(const fs::path& path) {
-    SH_AD_PathValidator();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     // РџСЂРѕРІРµСЂРєР° РЅР° РїСѓСЃС‚РѕС‚Сѓ
     if (path.empty()) {
-        return Result<fs::path, std::string>::Err(OBF_CSTR("VPK path is empty"));
+        return Result<fs::path, std::string>::Err("VPK path is empty");
     }
 
     // РџСЂРѕРІРµСЂРєР° СЂР°СЃС€РёСЂРµРЅРёСЏ
-    if (!HasValidExtension(path, { OBF_CSTR(".vpk") })) {
+    if (!HasValidExtension(path, { ".vpk" })) {
         return Result<fs::path, std::string>::Err(
-            OBF_CSTR("Invalid VPK extension: ") + path.extension().string()
+            "Invalid VPK extension: " + path.extension().string()
         );
     }
 
     // РџСЂРѕРІРµСЂРєР° СЃСѓС‰РµСЃС‚РІРѕРІР°РЅРёСЏ
     if (!fs::exists(path)) {
-        return Result<fs::path, std::string>::Err(OBF_CSTR("VPK file does not exist: ") + path.string());
+        return Result<fs::path, std::string>::Err("VPK file does not exist: " + path.string());
     }
 
     // РџСЂРѕРІРµСЂРєР° РЅР° СЃРёРјРІРѕР»РёС‡РµСЃРєРёРµ СЃСЃС‹Р»РєРё
     if (!IsSymlinkSafe(path)) {
-        return Result<fs::path, std::string>::Err(OBF_CSTR("VPK path contains unsafe symlink"));
+        return Result<fs::path, std::string>::Err("VPK path contains unsafe symlink");
     }
 
     try {
@@ -162,46 +122,41 @@ Result<fs::path, std::string> PathValidator::ValidateVPKPath(const fs::path& pat
     }
     catch (const fs::filesystem_error& e) {
         return Result<fs::path, std::string>::Err(
-            OBF_CSTR("Failed to canonicalize VPK path: ") + std::string(e.what())
+            "Failed to canonicalize VPK path: " + std::string(e.what())
         );
     }
 }
 
 Result<fs::path, std::string> PathValidator::ValidateConfigPath(const fs::path& path) {
-    SH_AD_PathValidator();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     if (path.empty()) {
-        return Result<fs::path, std::string>::Err(OBF_CSTR("Config path is empty"));
+        return Result<fs::path, std::string>::Err("Config path is empty");
     }
 
     // РџСЂРѕРІРµСЂРєР° СЂР°СЃС€РёСЂРµРЅРёСЏ
-    if (!HasValidExtension(path, { OBF_CSTR(".cfg"), OBF_CSTR(".json") })) {
+    if (!HasValidExtension(path, { ".cfg", ".json" })) {
         return Result<fs::path, std::string>::Err(
-            OBF_CSTR("Invalid config extension: ") + path.extension().string()
+            "Invalid config extension: " + path.extension().string()
         );
     }
 
     // РџСЂРѕРІРµСЂРєР° РЅР° path traversal
     std::string pathStr = path.string();
-    if (pathStr.find(OBF_CSTR("..")) != std::string::npos) {
-        return Result<fs::path, std::string>::Err(OBF_CSTR("Config path contains '..'"));
+    if (pathStr.find("..") != std::string::npos) {
+        return Result<fs::path, std::string>::Err("Config path contains '..'");
     }
 
     // РџСЂРѕРІРµСЂРєР° РёРјРµРЅРё С„Р°Р№Р»Р°
     fs::path filename = path.filename();
     if (filename.string().length() > 255) {
-        return Result<fs::path, std::string>::Err(OBF_CSTR("Config filename too long"));
+        return Result<fs::path, std::string>::Err("Config filename too long");
     }
 
     // РџСЂРѕРІРµСЂРєР° РЅР° РЅРµРґРѕРїСѓСЃС‚РёРјС‹Рµ СЃРёРјРІРѕР»С‹
-    const std::string invalidChars = OBF_CSTR("<>:\"/\\|?*");
+    const std::string invalidChars = "<>:\"/\\|?*";
     for (char c : filename.string()) {
         if (invalidChars.find(c) != std::string::npos) {
             return Result<fs::path, std::string>::Err(
-                OBF_CSTR("Config filename contains invalid character: ") + std::string(1, c)
+                "Config filename contains invalid character: " + std::string(1, c)
             );
         }
     }
@@ -210,11 +165,6 @@ Result<fs::path, std::string> PathValidator::ValidateConfigPath(const fs::path& 
 }
 
 fs::path PathValidator::GetCanonicalPath(const fs::path& path) {
-    SH_AD_PathValidator();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     try {
         return fs::canonical(path);
     }
@@ -224,11 +174,6 @@ fs::path PathValidator::GetCanonicalPath(const fs::path& path) {
 }
 
 bool PathValidator::IsWithinDirectory(const fs::path& path, const fs::path& directory) {
-    SH_AD_PathValidator();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     try {
         fs::path rel = fs::relative(path, directory);
         std::string relStr = rel.string();
@@ -236,7 +181,7 @@ bool PathValidator::IsWithinDirectory(const fs::path& path, const fs::path& dire
         if (relStr.empty()) return true;
         // Any ".." component means path escapes the directory
         for (const auto& part : rel) {
-            if (part == OBF_CSTR("..")) return false;
+            if (part == "..") return false;
         }
         return true;
     }

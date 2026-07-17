@@ -10,16 +10,6 @@
 #include "../VPKManager.h"
 #include "../SteamManager.h"
 #include "../VRF.h"
-#include "../SecurityHardening.h"
-namespace {
-__declspec(noinline) void SH_AD_ModelDecompiler() noexcept {
-    if (SH_DebugPort()) g_integritySeed ^= 0xDDEEFF00;
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
-}
-}
 
 
 namespace fs = std::filesystem;
@@ -29,50 +19,45 @@ namespace skin_parser {
     static std::atomic<uint64_t> g_modelTempCounter{ 0 };
 
     std::string StubModelDecompiler::decompileModel(const std::string& model_path) {
-    SH_AD_ModelDecompiler();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
         auto& logger = Logger::instance();
-        logger.log(OBF_CSTR("> Decompiling ") + model_path);
+        logger.log("> Decompiling " + model_path);
 
-        fs::path data_path = OBF_CSTR("decompiled_models/") + model_path + OBF_CSTR(".data");
+        fs::path data_path = "decompiled_models/" + model_path + ".data";
         if (fs::exists(data_path)) {
-            logger.log(OBF_CSTR("> Using existing data from ") + model_path + OBF_CSTR(".data"));
+            logger.log("> Using existing data from " + model_path + ".data");
             return Utils::readFile(data_path.string());
         }
 
         fs::path fp(model_path);
-        fp.replace_extension(OBF_CSTR(".vmdl_c"));
+        fp.replace_extension(".vmdl_c");
 
         auto getResult = VPKManager::GetInstance().GetFileFromVPK(SteamManager::GetInstance().vpkPath, fp.string());
 
         if (getResult.IsErr()) {
-            return OBF_CSTR("");
+            return "";
         }
 
         // Use a per-call unique temp file so parallel model decompiles never
         // overwrite each other's input/output.
         uint64_t uniqueId = g_modelTempCounter.fetch_add(1);
-        fs::path tempDir = fs::path(OBF_CSTR("temp")) / (OBF_CSTR("model_decompile_") + std::to_string(uniqueId));
+        fs::path tempDir = fs::path("temp") / ("model_decompile_" + std::to_string(uniqueId));
         std::error_code mkdirEc;
         fs::create_directories(tempDir, mkdirEc);
-        std::string tempModelPath = (tempDir / OBF_CSTR("model.vmdl_c")).string();
-        std::string tempOutputPath = (tempDir / OBF_CSTR("model.data")).string();
+        std::string tempModelPath = (tempDir / "model.vmdl_c").string();
+        std::string tempOutputPath = (tempDir / "model.data").string();
 
         FileData _temp = getResult.Value();
         VPKManager::GetInstance().SaveFileFromData(_temp, tempModelPath);
 
         std::string temp;
         VRF::GetInstance().TerminateLingeringDecompilerProcesses();
-        VRF::GetInstance().DecompileBlock(tempModelPath, OBF_CSTR("DATA"), temp, OBF_CSTR("-o \"") + tempOutputPath + OBF_CSTR("\""));
+        VRF::GetInstance().DecompileBlock(tempModelPath, "DATA", temp, "-o \"" + tempOutputPath + "\"");
         if (fs::exists(tempOutputPath)) {
             try {
                 temp = Utils::readFile(tempOutputPath);
             }
             catch (const std::exception& e) {
-                logger.log(OBF_CSTR("WARNING: Failed to read temp block output: ") + std::string(e.what()));
+                logger.log("WARNING: Failed to read temp block output: " + std::string(e.what()));
             }
         }
         Utils::quickSaveToFile(temp, data_path.string());
@@ -90,11 +75,6 @@ namespace skin_parser {
     }
 
     bool decompileAndParseModel(const std::string& model_path) {
-    SH_AD_ModelDecompiler();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
         auto& logger = Logger::instance();
         auto& data_manager = SkinDataManager::instance();
         auto& decompiled_models = data_manager.decompiledModels();
@@ -105,23 +85,23 @@ namespace skin_parser {
         }
 
         if (!data_manager.hasModelDecompiler()) {
-            logger.log(OBF_CSTR("ERROR: Model decompiler not initialized for: ") + model_path);
+            logger.log("ERROR: Model decompiler not initialized for: " + model_path);
             return false;
         }
 
         auto* decompiler = data_manager.getModelDecompiler();
         if (!decompiler) {
-            logger.log(OBF_CSTR("ERROR: Model decompiler is null for: ") + model_path);
+            logger.log("ERROR: Model decompiler is null for: " + model_path);
             return false;
         }
 
         try {
-            logger.log(OBF_CSTR("Decompiling model: ") + model_path);
+            logger.log("Decompiling model: " + model_path);
 
             std::string data_content = decompiler->decompileModel(model_path);
 
             if (data_content.empty()) {
-                logger.log(OBF_CSTR("WARNING: Empty decompilation result for: ") + model_path);
+                logger.log("WARNING: Empty decompilation result for: " + model_path);
                 return false;
             }
 
@@ -132,31 +112,26 @@ namespace skin_parser {
             parseMaterialGroupsFromDecompiledData(model);
 
             model.is_loaded = true;
-            logger.log(OBF_CSTR("Successfully decompiled and parsed model: ") + model_path +
-                OBF_CSTR(" (") + std::to_string(model.material_groups.size()) + OBF_CSTR(" material groups)"));
+            logger.log("Successfully decompiled and parsed model: " + model_path +
+                " (" + std::to_string(model.material_groups.size()) + " material groups)");
 
             return true;
         }
         catch (const std::exception& e) {
-            logger.log(OBF_CSTR("ERROR decompiling model ") + model_path + OBF_CSTR(": ") + std::string(e.what()));
+            logger.log("ERROR decompiling model " + model_path + ": " + std::string(e.what()));
             return false;
         }
     }
 
     void parseMaterialGroupsFromDecompiledData(DecompiledModel& model) {
-    SH_AD_ModelDecompiler();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
         auto& logger = Logger::instance();
 
         try {
             const std::string& data_content = model.data_content;
             size_t pos = 0;
 
-            while ((pos = data_content.find(OBF_CSTR("m_materialGroups"), pos)) != std::string::npos) {
-                pos = data_content.find(OBF_CSTR("["), pos);
+            while ((pos = data_content.find("m_materialGroups", pos)) != std::string::npos) {
+                pos = data_content.find("[", pos);
                 if (pos == std::string::npos) break;
 
                 int bracket_count = 1;
@@ -174,22 +149,22 @@ namespace skin_parser {
                 std::string groups_str = data_content.substr(group_start, group_end - group_start);
                 size_t group_pos = 0;
 
-                while ((group_pos = groups_str.find(OBF_CSTR("m_name"), group_pos)) != std::string::npos) {
+                while ((group_pos = groups_str.find("m_name", group_pos)) != std::string::npos) {
                     MaterialGroup material_group;
 
-                    group_pos = groups_str.find(OBF_CSTR("\""), group_pos);
+                    group_pos = groups_str.find("\"", group_pos);
                     if (group_pos == std::string::npos) break;
 
                     size_t name_start = group_pos + 1;
-                    size_t name_end = groups_str.find(OBF_CSTR("\""), name_start);
+                    size_t name_end = groups_str.find("\"", name_start);
                     if (name_end == std::string::npos) break;
 
                     material_group.name = groups_str.substr(name_start, name_end - name_start);
 
-                    size_t materials_pos = groups_str.find(OBF_CSTR("m_materials"), name_end);
+                    size_t materials_pos = groups_str.find("m_materials", name_end);
                     if (materials_pos == std::string::npos) break;
 
-                    materials_pos = groups_str.find(OBF_CSTR("["), materials_pos);
+                    materials_pos = groups_str.find("[", materials_pos);
                     if (materials_pos == std::string::npos) break;
 
                     int materials_bracket_count = 1;
@@ -207,9 +182,9 @@ namespace skin_parser {
                     std::string materials_array = groups_str.substr(materials_start, materials_end - materials_start);
                     size_t resource_pos = 0;
 
-                    while ((resource_pos = materials_array.find(OBF_CSTR("resource:\""), resource_pos)) != std::string::npos) {
+                    while ((resource_pos = materials_array.find("resource:\"", resource_pos)) != std::string::npos) {
                         size_t path_start = resource_pos + 10;
-                        size_t path_end = materials_array.find(OBF_CSTR("\""), path_start);
+                        size_t path_end = materials_array.find("\"", path_start);
                         if (path_end == std::string::npos) break;
 
                         std::string material_path = materials_array.substr(path_start, path_end - path_start);
@@ -218,9 +193,9 @@ namespace skin_parser {
                     }
 
                     model.material_groups.push_back(material_group);
-                    logger.log(OBF_CSTR("Found material group '") + material_group.name +
-                        OBF_CSTR("' with ") + std::to_string(material_group.materials.size()) +
-                        OBF_CSTR(" materials for model: ") + model.model_path);
+                    logger.log("Found material group '" + material_group.name +
+                        "' with " + std::to_string(material_group.materials.size()) +
+                        " materials for model: " + model.model_path);
 
                     group_pos = materials_end;
                 }
@@ -229,7 +204,7 @@ namespace skin_parser {
             }
         }
         catch (const std::exception& e) {
-            logger.log(OBF_CSTR("ERROR parsing material groups for ") + model.model_path + OBF_CSTR(": ") + std::string(e.what()));
+            logger.log("ERROR parsing material groups for " + model.model_path + ": " + std::string(e.what()));
         }
     }
 

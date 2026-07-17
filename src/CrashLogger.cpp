@@ -8,26 +8,11 @@
 #include <mutex>
 #include <sstream>
 #include <stdlib.h>
-#include "SecurityHardening.h"
-namespace {
-__declspec(noinline) void SH_AD_CrashLogger() noexcept {
-    if (SH_PebBeingDebugged()) g_integritySeed ^= 0xAABBCCDD;
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
-}
-}
 
 
 namespace fs = std::filesystem;
 
 static std::mutex& GetCrashLoggerMutex() {
-    SH_AD_CrashLogger();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     static std::mutex m;
     return m;
 }
@@ -42,7 +27,7 @@ namespace {
         int line
     ) {
         try {
-            fs::create_directories(OBF_CSTR("logs"));
+            fs::create_directories("logs");
         }
         catch (...) {
         }
@@ -54,14 +39,14 @@ namespace {
 
         std::ofstream log(filename, std::ios::app);
         if (log.is_open()) {
-            log << OBF_CSTR("[") << level << OBF_CSTR("] ")
-                << std::put_time(&local_tm, OBF_CSTR("%Y-%m-%d %H:%M:%S")) << OBF_CSTR("\n");
-            log << OBF_CSTR("Context: ") << context << OBF_CSTR("\n");
+            log << "[" << level << "] "
+                << std::put_time(&local_tm, "%Y-%m-%d %H:%M:%S") << "\n";
+            log << "Context: " << context << "\n";
             if (file && line > 0) {
-                log << OBF_CSTR("Location: ") << file << OBF_CSTR(":") << line << OBF_CSTR("\n");
+                log << "Location: " << file << ":" << line << "\n";
             }
-            log << OBF_CSTR("Details: ") << details << OBF_CSTR("\n");
-            log << OBF_CSTR("----------------------------------------\n");
+            log << "Details: " << details << "\n";
+            log << "----------------------------------------\n";
             log.flush();
         }
     }
@@ -73,9 +58,9 @@ namespace {
         localtime_s(&local_tm, &time_t_now);
 
         std::ostringstream filename;
-        filename << OBF_CSTR("logs/") << prefix
-            << std::put_time(&local_tm, OBF_CSTR("%Y-%m-%d_%H-%M-%S"))
-            << OBF_CSTR(".log");
+        filename << "logs/" << prefix
+            << std::put_time(&local_tm, "%Y-%m-%d_%H-%M-%S")
+            << ".log";
         return filename.str();
     }
 }
@@ -87,14 +72,9 @@ void CrashLogger::LogFatal(
     int line,
     bool terminate
 ) {
-    SH_AD_CrashLogger();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> lock(GetCrashLoggerMutex());
 
-    WriteLogEntry(BuildLogFilename("error_"), OBF_CSTR("FATAL"), context, details, file, line);
+    WriteLogEntry(BuildLogFilename("error_"), "FATAL", context, details, file, line);
 
     if (terminate) {
         std::abort();
@@ -107,14 +87,9 @@ void CrashLogger::LogError(
     const char* file,
     int line
 ) {
-    SH_AD_CrashLogger();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> lock(GetCrashLoggerMutex());
 
-    WriteLogEntry(BuildLogFilename("error_"), OBF_CSTR("ERROR"), context, details, file, line);
+    WriteLogEntry(BuildLogFilename("error_"), "ERROR", context, details, file, line);
 }
 
 void CrashLogger::LogWarning(
@@ -123,14 +98,9 @@ void CrashLogger::LogWarning(
     const char* file,
     int line
 ) {
-    SH_AD_CrashLogger();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> lock(GetCrashLoggerMutex());
 
-    WriteLogEntry(BuildLogFilename("warning_"), OBF_CSTR("WARNING"), context, details, file, line);
+    WriteLogEntry(BuildLogFilename("warning_"), "WARNING", context, details, file, line);
 }
 
 void CrashLogger::LogToFile(
@@ -141,12 +111,7 @@ void CrashLogger::LogToFile(
     const char* file,
     int line
 ) {
-    SH_AD_CrashLogger();
-    volatile int _sh_decoy = static_cast<int>(__rdtsc() & 0xF);
-    volatile int _sh_junk = 0;
-    for (int _sh_i = 0; _sh_i < _sh_decoy + 1; ++_sh_i) _sh_junk ^= _sh_i * 0x66661;
-    (void)_sh_junk;
     std::lock_guard<std::mutex> lock(GetCrashLoggerMutex());
 
-    WriteLogEntry(OBF_CSTR("logs/") + filename, level, context, details, file, line);
+    WriteLogEntry("logs/" + filename, level, context, details, file, line);
 }
